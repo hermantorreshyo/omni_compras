@@ -106,11 +106,12 @@
               </svg>
             </button>
           </div>
-          <p class="text-xs text-ink-400 mt-1.5">Formato: <span class="font-mono">DNI@Omni360</span></p>
+          <p class="text-xs text-ink-400 mt-1.5">Contraseña inicial: tu propio nombre de usuario (ej: <span class="font-mono">lesly.garcia</span>)</p>
         </div>
 
+
         <div>
-          <label class="block text-sm font-medium text-ink-700 mb-1.5" for="sel-sede">Sede / Fábrica</label>
+          <label class="block text-sm font-medium text-ink-700 mb-1.5" for="sel-sede">Sede de trabajo</label>
           <div class="relative">
             <select id="sel-sede"
               class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
@@ -122,6 +123,7 @@
               <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
             </svg>
           </div>
+          <p class="text-xs text-ink-400 mt-1.5">Selecciona la sede donde trabajas hoy.</p>
         </div>
 
         <p id="login-error" class="hidden text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></p>
@@ -252,6 +254,9 @@
           <input id="file-input" type="file" accept="image/*,application/pdf" capture="environment" class="hidden" />
         </label>
 
+        <!-- Panel OCR -->
+        <div id="ocr-panel" class="hidden"></div>
+
         <!-- Botones -->
         <div class="flex items-center justify-between gap-3">
           <button id="btn-clear-doc" class="hidden text-sm text-danger hover:underline">
@@ -313,7 +318,7 @@
           </div>
           <div>
             <label class="block text-sm font-medium text-ink-700 mb-1.5" for="sel-ubicacion">
-              Bodega destino
+              Bodega / Sede destino
             </label>
             <div class="relative">
               <select id="sel-ubicacion"
@@ -326,6 +331,7 @@
                 <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
               </svg>
             </div>
+            <p class="text-xs text-ink-400 mt-1">Por defecto: tu fábrica principal</p>
           </div>
         </div>
 
@@ -610,7 +616,139 @@
       </div>
     </div>
 
+  
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: CREAR NUEVO PROVEEDOR
+══════════════════════════════════════════════════════════ -->
+<div id="modal-proveedor"
+  class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+  style="background:rgba(15,23,42,0.6);backdrop-filter:blur(3px);">
+  <div class="bg-white rounded-2xl shadow-2xl border border-ink-200 w-full max-w-lg overflow-hidden">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-ink-100">
+      <div>
+        <h3 class="text-base font-semibold text-ink-900">Crear nuevo proveedor</h3>
+        <p class="text-xs text-ink-500 mt-0.5">Se registrará como distribuidor en el sistema OMNI</p>
+      </div>
+      <button id="btn-modal-prov-cancel"
+        class="text-ink-400 hover:text-ink-700 transition-colors p-1 rounded-lg">
+        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Cuerpo -->
+    <div class="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+      <p id="modal-prov-error"
+        class="hidden text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">
+            Razón social <span class="text-danger">*</span>
+          </label>
+          <input id="inp-prov-nombre" type="text" placeholder="El Duo Harinero S.A."
+            autocomplete="off"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                   focus:border-brand transition-colors" />
+        </div>
+
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">Nombre comercial</label>
+          <input id="inp-prov-comercial" type="text" placeholder="El Duo Harinero (dejar vacío para usar razón social)"
+            autocomplete="off"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                   focus:border-brand transition-colors" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">NIF / CIF</label>
+          <input id="inp-prov-nif" type="text" placeholder="A28375913"
+            autocomplete="off" spellcheck="false"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm font-mono
+                   text-ink-900 focus:border-brand transition-colors" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">Teléfono</label>
+          <input id="inp-prov-telefono" type="tel" placeholder="91 778 8411"
+            autocomplete="off"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                   focus:border-brand transition-colors" />
+        </div>
+
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">Email</label>
+          <input id="inp-prov-email" type="email" placeholder="comercial@duoharinero.com"
+            autocomplete="off"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                   focus:border-brand transition-colors" />
+        </div>
+
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">Dirección</label>
+          <input id="inp-prov-direccion" type="text" placeholder="Camino de Hormigueras, 108 — 28031 Madrid"
+            autocomplete="off"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                   focus:border-brand transition-colors" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex justify-end gap-3 px-6 py-4 border-t border-ink-100 bg-ink-50">
+      <button id="btn-modal-prov-cancel2"
+        class="text-sm font-medium text-ink-600 hover:text-ink-900 px-4 py-2.5 rounded-lg
+               border border-ink-300 hover:border-ink-400 bg-white transition-colors">
+        Cancelar
+      </button>
+      <button id="btn-modal-prov-save"
+        class="flex items-center gap-2 bg-brand hover:bg-brand-light text-white
+               font-medium text-sm py-2.5 px-5 rounded-lg transition-colors">
+        Crear proveedor
+      </button>
+    </div>
+  </div>
+</div>
+
   </main>
+</div>
+
+<script>
+  // Botón secundario de cancelar modal proveedor
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('btn-modal-prov-cancel2')?.addEventListener('click', () => {
+      document.getElementById('modal-proveedor').classList.add('hidden');
+      document.getElementById('sel-proveedor').value = '';
+    });
+  });
+</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: DETALLE OCR RAW
+══════════════════════════════════════════════════════════ -->
+<div id="modal-ocr-raw"
+  class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+  style="background:rgba(15,23,42,0.6);backdrop-filter:blur(3px);">
+  <div class="bg-white rounded-2xl shadow-2xl border border-ink-200 w-full max-w-lg overflow-hidden">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-ink-100">
+      <div>
+        <h3 class="text-base font-semibold text-ink-900">Datos extraídos del documento</h3>
+        <p class="text-xs text-ink-500 mt-0.5">JSON completo devuelto por el análisis IA</p>
+      </div>
+      <button id="btn-modal-ocr-close"
+        class="text-ink-400 hover:text-ink-700 transition-colors p-1 rounded-lg">
+        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="p-6 max-h-[65vh] overflow-y-auto">
+      <pre id="ocr-raw-content"
+        class="text-xs font-mono bg-ink-50 rounded-lg p-4 overflow-x-auto text-ink-700 whitespace-pre-wrap"></pre>
+    </div>
+  </div>
 </div>
 
 <script src="app.js"></script>

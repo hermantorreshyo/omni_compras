@@ -1,48 +1,59 @@
 /**
  * JOSEPAN 360 · OMNI · [1002] Albaranes de Compras
- * app.js  (v6.0 — Proxy PHP OmniCoreClient)
+ * app.js (v10.0 — OMNI API CORE v6.6.0)
  *
- * Llama ÚNICAMENTE a api/omni.php (mismo servidor).
- * PHP hace las peticiones cURL al API CORE → cero CORS.
- *
- * Contratos del API CORE v6.2 (via proxy):
- *  Login        POST ?action=login         {username, password, interlocutor_id}
- *  Interlocutors GET  ?action=interlocutors[&type=distribuidor]
- *  SKUs          GET  ?action=skus
- *  Locations     GET  ?action=locations
- *  Crear lote    POST ?action=batch
- *  Recepción     POST ?action=receive
+ * Cambios respecto a v9 según manual-desarrollador-subsistemas.md:
+ *  - login: interlocutor_id = sede elegida por el operario (NO hardcoded a 1)
+ *  - respuesta login normalizada con parseOmniResponse() conforme al envelope OMNI
+ *  - contraseña inicial = username (ej: lesly.garcia), no DNI@Omni360
+ *  - flujo de registro de albarán: purchasing_order → purchasing_order_line → receive inline
+ *  - recepción con batch inline: UNA sola llamada (no dos como en v9)
+ *  - campos SKU: sku_final_code (v6.6.0) con fallback a sku_code
+ *  - error_codes OMNI propagados: ERR_AUTH, ERR_STOCK, ERR_KARDEX, ERR_DUPLICATE
+ *  - selector de sede dinámico desde API CORE
  */
 
 'use strict';
 
 /* ══════════════════════════════════════════════════════
    1. CLIENTE HTTP → api/omni.php
+      parseOmniResponse: normaliza el envelope del proxy PHP
+      { ok, data, error, code } — idéntico al adaptador del manual
 ══════════════════════════════════════════════════════ */
 const Api = {
-  _base: 'api/omni.php',
+  _base:  'api/omni.php',
   _token: localStorage.getItem('omni_token') || '',
-  _interlocutorId: parseInt(localStorage.getItem('omni_iid') || '0', 10),
+  _iid:   parseInt(localStorage.getItem('omni_iid') || '0', 10),
 
-  setSession(token, interlocutorId) {
-    this._token         = token;
-    this._interlocutorId = interlocutorId;
+  setSession(token, iid) {
+    this._token = token; this._iid = iid;
     localStorage.setItem('omni_token', token);
-    localStorage.setItem('omni_iid',   String(interlocutorId));
+    localStorage.setItem('omni_iid',   String(iid));
   },
-
   clearSession() {
-    this._token = '';
-    this._interlocutorId = 0;
+    this._token = ''; this._iid = 0;
     localStorage.removeItem('omni_token');
     localStorage.removeItem('omni_iid');
   },
-
   _headers() {
     const h = { 'Content-Type': 'application/json' };
-    if (this._token)          h['Authorization']     = `Bearer ${this._token}`;
-    if (this._interlocutorId) h['X-Interlocutor-Id'] = String(this._interlocutorId);
+    if (this._token) h['Authorization']     = `Bearer ${this._token}`;
+    if (this._iid)   h['X-Interlocutor-Id'] = String(this._iid);
     return h;
+  },
+
+  /**
+   * Parsea la respuesta del proxy PHP.
+   * El proxy normaliza el envelope OMNI { status:'success'|'error', data, message, error_code }
+   * a { ok:bool, data:{}, error:string|null, code:string|null }.
+   */
+  parseResponse(raw) {
+    return {
+      ok:    raw.ok === true,
+      data:  raw.data   ?? null,
+      error: raw.error  ?? null,
+      code:  raw.code   ?? null,
+    };
   },
 
   async _call(method, params, body) {
@@ -55,66 +66,75 @@ const Api = {
         body: body ? JSON.stringify(body) : undefined,
       });
     } catch (e) {
-      throw { error: 'Sin conexión con el servidor.', code: 'ERR_NETWORK' };
+      throw { ok: false, error: 'Sin conexión con el servidor.', code: 'ERR_NETWORK' };
     }
-    const data = await res.json().catch(() => ({ ok: false, error: `Error HTTP ${res.status}` }));
-    if (data.ok === false || !res.ok) {
-      throw { error: data.error || `Error ${res.status}`, code: data.code || `HTTP_${res.status}`, status: res.status };
-    }
-    return data;
+    const raw = await res.json().catch(() => ({ ok: false, error: `Error HTTP ${res.status}`, code: `HTTP_${res.status}` }));
+    const r   = this.parseResponse(raw);
+    if (!r.ok) throw r;
+    return r;
   },
 
-  login:         (username, password, interlocutor_id) =>
-    Api._call('POST', { action: 'login' }, { username, password, interlocutor_id }),
-
-  interlocutors: (type = '') =>
-    Api._call('GET',  { action: 'interlocutors', ...(type ? { type } : {}) }),
-
-  skus:          (q = '', limit = 500) =>
-    Api._call('GET',  { action: 'skus', limit, offset: 0, ...(q ? { q } : {}) }),
-
-  locations:     () =>
-    Api._call('GET',  { action: 'locations' }),
-
-  batch:         (body) => Api._call('POST', { action: 'batch' },   body),
-  receive:       (body) => Api._call('POST', { action: 'receive' }, body),
+  // ── Endpoints ──────────────────────────────────────────
+  /** Login: interlocutor_id = sede seleccionada en el formulario */
+  login:              (u, p, iid)   => Api._call('POST', { action:'login'  }, { username:u, password:p, interlocutor_id:iid }),
+  me:                 ()            => Api._call('GET',  { action:'me' }),
+  interlocutors:      (type='')     => Api._call('GET',  { action:'interlocutors', all:'1', ...(type?{type}:{}) }),
+  interlocutorsPublic:()            => fetch('api/omni.php?action=interlocutors&all=1&public=1').then(r=>r.json()),
+  createInterlocutor: (b)           => Api._call('POST', { action:'create_interlocutor' }, b),
+  skus:               (q='',l=500)  => Api._call('GET',  { action:'skus', limit:l, offset:0, ...(q?{q}:{}) }),
+  locations:          ()            => Api._call('GET',  { action:'locations' }),
+  /** Crear cabecera del albarán en /purchasing/orders */
+  purchasingOrder:    (b)           => Api._call('POST', { action:'purchasing_order'  }, b),
+  /** Añadir línea al albarán en /purchasing/orders/{id}/details */
+  purchasingOrderLine:(b)           => Api._call('POST', { action:'purchasing_order_line' }, b),
+  /**
+   * Recepción física con batch inline (una sola llamada).
+   * body.batch = { batch_reference, expiration_date, cost_per_unit? }
+   * body.batch_id = ID si el lote ya existe
+   */
+  receive:            (b)           => Api._call('POST', { action:'receive' }, b),
+  ocrAlbaran:         (img)         => Api._call('POST', { action:'ocr_albaran' }, { image_b64:img }),
+  // ── Proveedores (catalog/suppliers) ──────────────────
+  suppliers:          (q='', isStd=null) => Api._call('GET',  { action:'suppliers', ...(q?{q}:{}), ...(isStd!==null?{is_standardized:isStd}:{}) }),
+  createSupplier:     (b)           => Api._call('POST', { action:'suppliers' }, b),
+  updateSupplier:     (id, b)       => Api._call('PUT',  { action:'suppliers', id }, b),
+  deleteSupplier:     (id)          => Api._call('DELETE',{ action:'suppliers', id }),
+  supplierItems:      (supplierId)  => Api._call('GET',  { action:'supplier_items', supplier_id:supplierId }),
+  supplierPrices:     (supplierId)  => Api._call('GET',  { action:'supplier_prices', supplier_id:supplierId }),
+  /** RBAC de pantallas: determina qué secciones puede ver el usuario en [1002] */
+  rbacScreens:        (subsystem=1002) => Api._call('GET', { action:'rbac_screens', subsystem }),
 };
 
 /* ══════════════════════════════════════════════════════
    2. ESTADO
 ══════════════════════════════════════════════════════ */
 const S = {
-  /* Sesión */
-  user:           null,
-  interlocutorId: Api._interlocutorId,
+  // Sesión
+  user: null, interlocutorId: Api._iid, sedePrincipalId: 0,
+  sedeName: '', role: '', permissions: [],
 
-  /* Catálogos */
-  interlocutors: [],
-  skus:          [],
-  locations:     [],
-  byEan:         {},
-  byId:          {},
+  // Catálogos
+  suppliers: [], todosBodegas: [], skus: [], byEan: {}, byId: {},
 
-  /* Formulario en curso */
-  docB64:    null,
-  docNombre: null,
-  numAlbaran:'',
-  proveedorId:  0,
-  proveedorNom: '',
-  ubicacionId:  0,
-  ubicacionNom: '',
-  items:     [],   // [{ skuId, ean, nombre, unidadBase, quantity, batchRef, expDate, labelComercial }]
+  // Formulario
+  docB64: null, docNombre: null, ocrData: null,
+  numAlbaran: '', purchaseOrderId: null,
+  proveedorId: 0, proveedorNom: '',
+  bodegaId: 0,    bodegaNom: '',
+  items: [],
 
   step: 1,
 };
 
 /* ══════════════════════════════════════════════════════
    3. CONVERSIÓN METROLÓGICA
+   Siempre en unidad base (g / ml / ud). Math.round() elimina
+   errores de punto flotante antes de enviar al kardex.
 ══════════════════════════════════════════════════════ */
 const FACTORES = {
-  g:  { g:1, '100g':100, '500g':500, kg:1000, '5kg':5000, '25kg':25000, '50kg':50000, t:1000000 },
-  ml: { ml:1, cl:10, '200ml':200, '500ml':500, l:1000, '5l':5000, '20l':20000 },
-  ud: { ud:1, cj6:6, cj12:12, cj24:24, cj48:48 },
+  g:  { g:1,'100g':100,'500g':500,kg:1000,'5kg':5000,'25kg':25000,'50kg':50000,t:1000000 },
+  ml: { ml:1,cl:10,'200ml':200,'500ml':500,l:1000,'5l':5000,'20l':20000 },
+  ud: { ud:1,cj6:6,cj12:12,cj24:24,cj48:48 },
 };
 const UC_OPTS = {
   g:  [{v:'g',l:'Gramos (g)'},{v:'100g',l:'Sobre 100 g'},{v:'500g',l:'Bolsa 500 g'},{v:'kg',l:'Kilogramo (1 kg)'},{v:'5kg',l:'Saco 5 kg'},{v:'25kg',l:'Saco 25 kg'},{v:'50kg',l:'Saco 50 kg'},{v:'t',l:'Tonelada'}],
@@ -127,8 +147,8 @@ const convertir = (val, ub, uc) =>
 /* ══════════════════════════════════════════════════════
    4. UTILIDADES
 ══════════════════════════════════════════════════════ */
-const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const $  = id => document.getElementById(id);
+const esc     = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const $       = id => document.getElementById(id);
 const fmtDate = iso => iso ? new Date(iso + 'T00:00:00').toLocaleDateString('es-ES') : '—';
 const genLote = () => {
   const d = new Date();
@@ -138,22 +158,20 @@ const genLote = () => {
 /* ══════════════════════════════════════════════════════
    5. TOAST
 ══════════════════════════════════════════════════════ */
-let _toastTimer;
+let _tt;
 function toast(msg, type = 'ok') {
-  const el  = $('toast');
-  const colors = { ok: 'bg-ok', error: 'bg-danger', warn: 'bg-warn' };
-  const icons  = { ok: '✓', error: '✕', warn: '⚠' };
-  el.className = el.className.replace(/bg-\w+/g, '');
-  el.classList.add(colors[type] ?? 'bg-ok');
-  $('toast-icon').textContent = icons[type] ?? '✓';
+  const el = $('toast');
+  el.className = el.className.replace(/bg-\S+/g, '');
+  el.classList.add({ ok:'bg-ok', error:'bg-danger', warn:'bg-warn' }[type] ?? 'bg-ok');
+  $('toast-icon').textContent = { ok:'✓', error:'✕', warn:'⚠' }[type] ?? '✓';
   $('toast-msg').textContent  = msg;
   el.classList.remove('hide');
-  clearTimeout(_toastTimer);
-  _toastTimer = setTimeout(() => el.classList.add('hide'), 3000);
+  clearTimeout(_tt);
+  _tt = setTimeout(() => el.classList.add('hide'), 3500);
 }
 
 /* ══════════════════════════════════════════════════════
-   6. NAVEGACIÓN ENTRE VISTAS Y PASOS
+   6. NAVEGACIÓN SPA
 ══════════════════════════════════════════════════════ */
 function showView(id) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
@@ -163,133 +181,95 @@ function showView(id) {
 function goStep(n) {
   S.step = n;
   [1,2,3,4].forEach(i => {
-    const c = $(`step-${i}`);
-    const circle = $(`step${i}-circle`);
-    const label  = $(`step${i}-label`);
-    if (!c) return;
-
-    // Mostrar/ocultar paneles
-    if (i === n) c.classList.remove('hidden');
-    else         c.classList.add('hidden');
-
-    // Step indicator
+    $(`step-${i}`)?.classList.toggle('hidden', i !== n);
+    const circle = $(`step${i}-circle`), label = $(`step${i}-label`);
+    if (!circle) return;
     if (i < n) {
-      circle.className = circle.className.replace('bg-ink-200 text-ink-500','').replace('bg-brand text-white','');
+      circle.className = circle.className.replace(/bg-ink-200\s+text-ink-500|bg-brand\s+text-white/g,'');
       circle.classList.add('bg-ok','text-white');
       circle.innerHTML = `<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>`;
       label?.classList.remove('text-ink-400'); label?.classList.add('text-ok');
       $(`line-${i}-${i+1}`)?.classList.add('done');
     } else if (i === n) {
-      circle.className = circle.className.replace('bg-ink-200 text-ink-500','').replace('bg-ok text-white','');
+      circle.className = circle.className.replace(/bg-ok\s+text-white|bg-ink-200\s+text-ink-500/g,'');
       circle.classList.add('bg-brand','text-white');
       circle.textContent = i;
       label?.classList.remove('text-ink-400','text-ok'); label?.classList.add('text-ink-900');
     } else {
-      circle.className = circle.className.replace('bg-brand text-white','').replace('bg-ok text-white','');
+      circle.className = circle.className.replace(/bg-brand\s+text-white|bg-ok\s+text-white/g,'');
       circle.classList.add('bg-ink-200','text-ink-500');
       circle.textContent = i;
       label?.classList.remove('text-ink-900','text-ok'); label?.classList.add('text-ink-400');
       if (i > 1) $(`line-${i-1}-${i}`)?.classList.remove('done');
     }
   });
-
-  // Ocultar success si aparece
   $('step-success')?.classList.add('hidden');
 }
 
 /* ══════════════════════════════════════════════════════
-   7. LOGIN
+   7. LOGIN — con interlocutor_id real de la sede elegida
 ══════════════════════════════════════════════════════ */
 async function initLoginView() {
-  // Cargar sedes (interlocutors tipo empresa/fabrica) sin token — petición pública
-  // En el API v6 el login necesita interlocutor_id, así que primero cargamos las fábricas
-  // usando una petición sin auth. Si el endpoint requiere auth, mostramos un campo manual.
-  try {
-    const res = await Api.interlocutors('fabrica');
-    const items = res.data?.items ?? [];
-    const sel = $('sel-sede');
-    sel.innerHTML = '<option value="">— Seleccionar sede —</option>';
-    items.forEach(i => {
-      const o = document.createElement('option');
-      o.value       = i.id;
-      o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
-      sel.appendChild(o);
-    });
-  } catch(_) {
-    // Si no carga sin auth, permitir entrada manual del ID
-    const sel = $('sel-sede');
-    sel.innerHTML = '';
-    sel.insertAdjacentHTML('beforeend',
-      '<option value="">— Sin conexión previa —</option>' +
-      '<option value="1">Fábrica 1 - Majadahonda</option>'
-    );
-  }
+  _cargarSedesLogin();
 
-  // Toggle password
   $('btn-toggle-pass').addEventListener('click', () => {
-    const inp = $('inp-password');
-    inp.type = inp.type === 'password' ? 'text' : 'password';
+    const i = $('inp-password'); i.type = i.type === 'password' ? 'text' : 'password';
   });
-
-  // Enter avanza campos
-  $('inp-username').addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); $('inp-password').focus(); }
-  });
-  $('inp-password').addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); $('sel-sede').focus(); }
-  });
+  $('inp-username').addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); $('inp-password').focus(); } });
+  $('inp-password').addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); $('sel-sede').focus(); } });
+  $('sel-sede').addEventListener('keydown',    e => { if (e.key==='Enter') { e.preventDefault(); $('btn-login').click(); } });
 
   $('form-login').addEventListener('submit', async e => {
     e.preventDefault();
-    const username      = $('inp-username').value.trim();
-    const password      = $('inp-password').value;
-    const interlocId    = parseInt($('sel-sede').value || '0', 10);
-    const errEl         = $('login-error');
-    const btn           = $('btn-login');
-
+    const username = $('inp-username').value.trim();
+    const password = $('inp-password').value;
+    const sedeVal  = $('sel-sede').value;
+    const errEl    = $('login-error'), btn = $('btn-login');
     errEl.classList.add('hidden');
 
-    if (!username || !password) {
-      errEl.textContent = 'Usuario y contraseña son obligatorios.';
-      errEl.classList.remove('hidden'); return;
-    }
-    if (!interlocId) {
-      errEl.textContent = 'Selecciona la sede antes de entrar.';
-      errEl.classList.remove('hidden'); return;
-    }
+    if (!username || !password) { errEl.textContent='Usuario y contraseña obligatorios.'; errEl.classList.remove('hidden'); return; }
+    if (!sedeVal) { errEl.textContent='Selecciona la sede donde trabajas hoy.'; errEl.classList.remove('hidden'); return; }
+
+    const sedeId  = parseInt(sedeVal, 10);
+    const sedeNom = $('sel-sede').selectedOptions[0]?.text ?? '';
 
     btn.disabled = true;
     $('btn-login-label').textContent = 'Verificando…';
     $('btn-login-spin').classList.remove('hidden');
 
     try {
-      const res = await Api.login(username, password, interlocId);
-      const token = res.data?.token;
-      const user  = res.data?.user ?? {};
+      // v6.6.0: interlocutor_id = sede elegida por el operario (fija el contexto de la sesión)
+      // contraseña inicial = propio username (ej: lesly.garcia)
+      const r = await Api.login(username, password, sedeId);
 
-      Api.setSession(token, interlocId);
-      S.user           = user;
-      S.interlocutorId = interlocId;
+      // La respuesta normalizada contiene directamente interlocutor_id e interlocutor_name
+      const d = r.data;
+      Api.setSession(d.token, d.interlocutor_id ?? sedeId);
+      S.user            = d;
+      S.interlocutorId  = d.interlocutor_id  ?? sedeId;
+      S.sedePrincipalId = S.interlocutorId;
+      S.sedeName        = d.interlocutor_name ?? sedeNom;
+      S.role            = d.role              ?? '';
+      S.permissions     = d.permissions       ?? [];
 
-      // Header
-      $('hdr-nombre').textContent = user.nombre || user.full_name || username;
-      $('hdr-sede').textContent   = user.tienda  || user.sede      || `Sede ${interlocId}`;
-
-      // Actualizar timestamp
-      $('lbl-fecha').textContent = new Date().toLocaleString('es-ES', {
-        day:'2-digit', month:'2-digit', year:'numeric',
-        hour:'2-digit', minute:'2-digit'
+      $('hdr-nombre').textContent = d.username  ?? username;
+      $('hdr-sede').textContent   = S.sedeName;
+      $('lbl-fecha').textContent  = new Date().toLocaleString('es-ES',{
+        day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'
       });
 
       await cargarCatalogos();
-      showView('view-app');
-      goStep(1);
+      // RBAC de pantallas — determina secciones visibles para este rol/sede
+      await _cargarRbacScreens();
+      showView('view-app'); goStep(1);
 
     } catch (err) {
+      // Manejar error_codes OMNI: ERR_AUTH, ERR_RBAC, etc.
       errEl.textContent =
+        err.code === 'ERR_AUTH'    ? 'Usuario o contraseña incorrectos.' :
+        err.code === 'ERR_RBAC'    ? 'Sin permisos para esta sede.' :
         err.code === 'ERR_NETWORK' ? 'Sin conexión con el servidor.' :
-        err.status === 401         ? 'Usuario o contraseña incorrectos.' :
-        err.error  || 'Error al iniciar sesión.';
+        (err.error || 'Error al iniciar sesión.');
       errEl.classList.remove('hidden');
     } finally {
       btn.disabled = false;
@@ -299,480 +279,574 @@ async function initLoginView() {
   });
 }
 
-/* ══════════════════════════════════════════════════════
-   8. CATÁLOGOS
-══════════════════════════════════════════════════════ */
-async function cargarCatalogos() {
+async function _cargarSedesLogin() {
+  const sel = $('sel-sede');
+  sel.innerHTML = '<option value="">— Cargando sedes… —</option>';
   try {
-    const [skusRes, locsRes, intRes] = await Promise.all([
-      Api.skus(), Api.locations(), Api.interlocutors('distribuidor'),
-    ]);
-
-    // SKUs
-    S.skus  = skusRes.data?.items  ?? [];
-    S.byEan = {};
-    S.byId  = {};
-    S.skus.forEach(s => {
-      if (s.ean13)    S.byEan[s.ean13]      = s;
-      if (s.ean)      S.byEan[s.ean]        = s;
-      if (s.id)       S.byId[String(s.id)]  = s;
-    });
-
-    // Ubicaciones
-    S.locations = locsRes.data?.items ?? [];
-    const selUbic = $('sel-ubicacion');
-    selUbic.innerHTML = '<option value="">— Sin asignar —</option>';
-    S.locations.forEach(l => {
+    const raw  = await Api.interlocutorsPublic();
+    const items = raw.data?.items ?? [];
+    sel.innerHTML = '<option value="">— Seleccionar sede —</option>';
+    items.forEach(i => {
       const o = document.createElement('option');
-      o.value       = l.id;
-      o.textContent = `${l.area_type || ''} ${l.position || ''}`.trim() || `Ubicación ${l.id}`;
-      selUbic.appendChild(o);
+      o.value = i.id; o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
+      sel.appendChild(o);
     });
+    if (!items.length) _fallbackSedes(sel);
+  } catch(_) { _fallbackSedes(sel); }
+}
 
-    // Proveedores (distribuidores)
-    S.interlocutors = intRes.data?.items ?? [];
-    const selProv = $('sel-proveedor');
-    selProv.innerHTML = '<option value="">— Seleccionar —</option>';
-    S.interlocutors.forEach(i => {
-      const o = document.createElement('option');
-      o.value       = i.id;
-      o.textContent = i.commercial_name || i.fiscal_name || `Proveedor ${i.id}`;
-      selProv.appendChild(o);
-    });
+function _fallbackSedes(sel) {
+  const SEDES = [[1,'JOSEPAN 360'],[2,'OBRADOR'],[3,'LA PASTELERÍA'],[4,'VIA 18'],[5,'VIA 15'],
+    [6,'VAGUADA'],[7,'CASTELLANA'],[8,'CEDACEROS'],[9,'XANADÚ'],[10,'SAN BLAS'],
+    [11,'MADRID RIO'],[12,'CARTAGENA'],[13,'ISLAZUL'],[14,'VALLECAS'],[15,'LEGANÉS'],
+    [16,'TORREJÓN'],[17,'MAJADAHONDA']];
+  sel.innerHTML = '<option value="">— Seleccionar sede —</option>';
+  SEDES.forEach(([id,nom]) => {
+    const o = document.createElement('option'); o.value=id; o.textContent=nom; sel.appendChild(o);
+  });
+}
 
-  } catch (err) {
-    console.warn('[1002] Error cargando catálogos:', err.error ?? err);
+/* ══════════════════════════════════════════════════════
+   7b. RBAC DE PANTALLAS (manual v6.6.0 §16)
+   GET /rbac/subsystems/1002/my-screens
+   screens = '*'  → SuperAdmin, todo visible
+   screens = []   → sin acceso → logout
+   screens = ['registro', ...] → solo esas secciones
+══════════════════════════════════════════════════════ */
+async function _cargarRbacScreens() {
+  try {
+    const r = await Api.rbacScreens(1002);
+    S.screens = r.data?.screens ?? '*';
+
+    // Sin ningún acceso → redirigir al login
+    if (Array.isArray(S.screens) && S.screens.length === 0) {
+      toast('Sin permisos de acceso a este módulo.', 'error');
+      setTimeout(_logout, 2000);
+    }
+  } catch(_) {
+    // Si el endpoint aún no está disponible: acceso total (compatibilidad)
+    S.screens = '*';
   }
 }
 
 /* ══════════════════════════════════════════════════════
-   9. PASO 1 — Documento
+   8. CATÁLOGOS
+══════════════════════════════════════════════════════ */
+async function cargarCatalogos() {
+  const [skusR, allR, suppR] = await Promise.all([
+    Api.skus().catch(()=>({data:{items:[]}})),
+    Api.interlocutors().catch(()=>({data:{items:[]}})),
+    Api.suppliers().catch(()=>({data:{items:[]}})),
+  ]);
+
+  S.skus = skusR.data?.items ?? [];
+  S.byEan = {}; S.byId = {};
+  S.skus.forEach(s => {
+    if (s.ean13) S.byEan[s.ean13] = s;
+    if (s.ean)   S.byEan[s.ean]   = s;
+    if (s.id)    S.byId[String(s.id)] = s;
+  });
+
+  // Bodega destino: todos los interlocutores de la red
+  S.todosBodegas = allR.data?.items ?? [];
+  // Proveedores: catalog/suppliers (endpoint dedicado)
+  S.suppliers = suppR.data?.items ?? [];
+  poblarSelectBodega();
+  poblarSelectProveedor();
+}
+
+function poblarSelectBodega() {
+  const sel = $('sel-ubicacion'); if (!sel) return;
+  sel.innerHTML = '<option value="">— Seleccionar —</option>';
+  S.todosBodegas.forEach(i => {
+    const o = document.createElement('option');
+    o.value = i.id; o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
+    if (parseInt(i.id) === S.sedePrincipalId) o.selected = true;
+    sel.appendChild(o);
+  });
+  if (sel.value) { S.bodegaId=parseInt(sel.value,10); S.bodegaNom=sel.selectedOptions[0]?.text??''; }
+}
+
+function poblarSelectProveedor() {
+  const sel = $('sel-proveedor'); if (!sel) return;
+  sel.innerHTML = '<option value="">— Seleccionar proveedor —</option><option value="__new__">+ Crear nuevo proveedor…</option>';
+  S.suppliers.forEach(i => {
+    const o = document.createElement('option');
+    o.value = i.id;
+    o.textContent = i.commercial_name || i.fiscal_name || `Proveedor ${i.id}`;
+    sel.appendChild(o);
+  });
+}
+
+/** Busca proveedor en la lista por NIF o nombre parcial */
+function matchProveedor(ocrProv) {
+  if (!ocrProv) return null;
+  const nom = (ocrProv.nombre_comercial || ocrProv.nombre_fiscal || '').toLowerCase();
+  const nif = (ocrProv.nif || '').replace(/\s/g,'').toLowerCase();
+  return S.suppliers.find(p => {
+    const pNom = (p.commercial_name || p.fiscal_name || '').toLowerCase();
+    const pNif = (p.fiscal_id || '').replace(/\s/g,'').toLowerCase();
+    if (nif && pNif && pNif === nif) return true;
+    if (nom && pNom && (pNom.includes(nom) || nom.includes(pNom))) return true;
+    return false;
+  }) ?? null;
+}
+
+/* ══════════════════════════════════════════════════════
+   9. PASO 1 — Documento + OCR
 ══════════════════════════════════════════════════════ */
 function initStep1() {
-  const fi  = $('file-input');
-  const dz  = $('drop-zone');
-  const btn = $('btn-step1-next');
-
-  fi.addEventListener('change', e => { const f = e.target.files?.[0]; if (f) cargarDoc(f); });
+  const fi=$('file-input'), dz=$('drop-zone'), btn=$('btn-step1-next');
+  fi.addEventListener('change',  e => { const f=e.target.files?.[0]; if(f) cargarDoc(f); });
   dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('border-brand','bg-brand/5'); });
-  dz.addEventListener('dragleave', ()  => dz.classList.remove('border-brand','bg-brand/5'));
+  dz.addEventListener('dragleave', () => dz.classList.remove('border-brand','bg-brand/5'));
   dz.addEventListener('drop', e => {
     e.preventDefault(); dz.classList.remove('border-brand','bg-brand/5');
-    const f = e.dataTransfer?.files?.[0]; if (f) cargarDoc(f);
+    const f=e.dataTransfer?.files?.[0]; if(f) cargarDoc(f);
   });
-
   $('btn-clear-doc').addEventListener('click', () => {
-    S.docB64 = null; S.docNombre = null;
-    fi.value = '';
-    $('dz-idle').classList.remove('hidden');
-    $('dz-preview').classList.add('hidden');
+    S.docB64=null; S.docNombre=null; S.ocrData=null;
+    fi.value=''; btn.disabled=true;
+    $('dz-idle').classList.remove('hidden'); $('dz-preview').classList.add('hidden');
     $('btn-clear-doc').classList.add('hidden');
-    btn.disabled = true;
+    $('ocr-panel').classList.add('hidden');
   });
-
   btn.addEventListener('click', () => goStep(2));
 }
 
 function cargarDoc(file) {
   const r = new FileReader();
-  r.onload = e => {
-    S.docB64    = e.target.result;
-    S.docNombre = file.name;
-    $('dz-idle').classList.add('hidden');
-    $('dz-preview').classList.remove('hidden');
+  r.onload = async e => {
+    S.docB64=e.target.result; S.docNombre=file.name;
+    $('dz-idle').classList.add('hidden'); $('dz-preview').classList.remove('hidden');
     if (file.type.startsWith('image/')) {
-      $('prev-img').src = S.docB64; $('prev-img').classList.remove('hidden'); $('prev-pdf').classList.add('hidden');
+      $('prev-img').src=S.docB64; $('prev-img').classList.remove('hidden'); $('prev-pdf').classList.add('hidden');
     } else {
-      $('prev-nom').textContent = file.name; $('prev-pdf').classList.remove('hidden'); $('prev-img').classList.add('hidden');
+      $('prev-nom').textContent=file.name; $('prev-pdf').classList.remove('hidden'); $('prev-img').classList.add('hidden');
     }
     $('btn-clear-doc').classList.remove('hidden');
-    $('btn-step1-next').disabled = false;
+    $('btn-step1-next').disabled=false;
+    if (file.type.startsWith('image/')) await _ejecutarOcr();
   };
   r.readAsDataURL(file);
 }
 
+async function _ejecutarOcr() {
+  const panel = $('ocr-panel');
+  panel.className = 'mt-4 rounded-xl border border-blue-200 bg-blue-50 p-4';
+  panel.innerHTML = `<div class="flex items-center gap-2.5 text-blue-700"><svg class="spin w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg><p class="text-sm font-medium">Analizando documento con IA…</p></div>`;
+  panel.classList.remove('hidden');
+
+  try {
+    const res = await Api.ocrAlbaran(S.docB64);
+    const ocr = res.data?.albaran;
+    S.ocrData = ocr;
+    if (!ocr) { _ocrFallback(panel); return; }
+
+    if (ocr.numero_albaran) { $('inp-num-albaran').value=ocr.numero_albaran; S.numAlbaran=ocr.numero_albaran; }
+    const pm = matchProveedor(ocr.proveedor);
+    if (pm) { $('sel-proveedor').value=pm.id; S.proveedorId=parseInt(pm.id,10); S.proveedorNom=pm.commercial_name||pm.fiscal_name; }
+
+    _ocrRenderPanel(panel, ocr, !!pm);
+  } catch(err) {
+    panel.className='mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4';
+    panel.innerHTML=`<p class="text-sm font-medium text-amber-700">⚠ No se pudo analizar el documento: ${esc(err.error||'Error desconocido')}. Rellena los datos manualmente.</p>`;
+  }
+}
+
+function _ocrFallback(panel) {
+  panel.className='mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4';
+  panel.innerHTML=`<p class="text-sm font-medium text-amber-700">⚠ No se detectaron datos. Rellena los campos manualmente.</p>`;
+}
+
+function _ocrRenderPanel(panel, ocr, pmFound) {
+  const cf={'alta':'text-green-700 bg-green-100','media':'text-amber-700 bg-amber-100','baja':'text-red-700 bg-red-100'};
+  const cn={'alta':'Alta','media':'Media','baja':'Baja'};
+  const c=ocr.confianza||'media', nl=(ocr.lineas||[]).length;
+  const pn=ocr.proveedor?.nombre_comercial||ocr.proveedor?.nombre_fiscal||'—';
+  const nif=ocr.proveedor?.nif||'—';
+
+  panel.className='mt-4 rounded-xl border border-brand/20 bg-brand/5 p-4 space-y-3';
+  panel.innerHTML=`
+    <div class="flex items-start justify-between gap-3">
+      <div><p class="text-sm font-semibold text-brand">✓ Documento analizado</p>
+           <p class="text-xs text-ink-500 mt-0.5">Confianza: <span class="inline-flex px-1.5 py-0.5 rounded text-xs font-medium ${cf[c]}">${cn[c]}</span></p></div>
+      <button id="btn-ocr-raw" class="text-xs text-brand underline whitespace-nowrap">Ver datos completos</button>
+    </div>
+    <div class="grid grid-cols-2 gap-2 text-xs">
+      <div class="bg-white rounded-lg p-2.5 border border-ink-200"><p class="text-ink-400 font-medium uppercase tracking-wide text-[10px]">N.º Albarán</p><p class="font-semibold text-ink-900 mt-0.5 font-mono">${esc(ocr.numero_albaran||'—')}</p></div>
+      <div class="bg-white rounded-lg p-2.5 border border-ink-200"><p class="text-ink-400 font-medium uppercase tracking-wide text-[10px]">Fecha</p><p class="font-semibold text-ink-900 mt-0.5">${esc(ocr.fecha_albaran?fmtDate(ocr.fecha_albaran):'—')}</p></div>
+      <div class="bg-white rounded-lg p-2.5 border border-ink-200 col-span-2">
+        <p class="text-ink-400 font-medium uppercase tracking-wide text-[10px]">Proveedor detectado</p>
+        <p class="font-semibold text-ink-900 mt-0.5">${esc(pn)}</p>
+        <p class="text-ink-400 font-mono text-[11px]">${nif!=='—'?'NIF: '+esc(nif):''}</p>
+        ${!pmFound?`<p class="text-amber-600 text-[11px] mt-1">⚠ No encontrado. <button id="btn-ocr-crear-prov" class="underline font-medium">Crear proveedor</button></p>`:'<p class="text-green-600 text-[11px] mt-1">✓ Encontrado en el sistema</p>'}
+      </div>
+    </div>
+    <div class="bg-white rounded-lg p-2.5 border border-ink-200">
+      <p class="text-ink-400 font-medium uppercase tracking-wide text-[10px] mb-1.5">Líneas detectadas (${nl})</p>
+      <div class="space-y-1 max-h-40 overflow-y-auto">
+        ${(ocr.lineas||[]).map((l,i)=>`
+          <div class="flex items-start gap-2 text-xs py-1 border-b border-ink-100 last:border-0">
+            <span class="text-ink-400 font-mono flex-shrink-0 w-4">${i+1}.</span>
+            <div class="min-w-0">
+              <p class="text-ink-800 font-medium truncate">${esc(l.descripcion||'—')}</p>
+              <p class="text-ink-400 font-mono">${esc(l.cantidad_recibida||'')} ${l.lote?'· Lote: '+esc(l.lote):''} ${l.fecha_caducidad?'· Cad: '+esc(fmtDate(l.fecha_caducidad)):''}</p>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <p class="text-xs text-ink-400">Revisa y corrige los datos en el paso siguiente.</p>`;
+
+  document.getElementById('btn-ocr-raw')?.addEventListener('click', () => {
+    $('modal-ocr-raw').classList.remove('hidden');
+    $('ocr-raw-content').textContent = JSON.stringify(ocr, null, 2);
+  });
+  document.getElementById('btn-ocr-crear-prov')?.addEventListener('click', () => {
+    if (ocr.proveedor) {
+      $('inp-prov-nombre').value    = ocr.proveedor.nombre_fiscal    || '';
+      $('inp-prov-comercial').value = ocr.proveedor.nombre_comercial || '';
+      $('inp-prov-nif').value       = ocr.proveedor.nif              || '';
+      $('inp-prov-telefono').value  = ocr.proveedor.telefono         || '';
+      $('inp-prov-email').value     = ocr.proveedor.email            || '';
+      $('inp-prov-direccion').value = ocr.proveedor.direccion        || '';
+    }
+    abrirModalProveedor();
+  });
+}
+
 /* ══════════════════════════════════════════════════════
-   10. PASO 2 — Cabecera del albarán
+   10. PASO 2 — Cabecera + proveedor
 ══════════════════════════════════════════════════════ */
 function initStep2() {
   $('btn-step2-back').addEventListener('click', () => goStep(1));
-
+  $('sel-proveedor').addEventListener('change', e => {
+    if (e.target.value === '__new__') { e.target.value=''; abrirModalProveedor(); }
+  });
+  $('sel-ubicacion').addEventListener('change', e => {
+    S.bodegaId=parseInt(e.target.value||'0',10);
+    S.bodegaNom=e.target.selectedOptions[0]?.text??'';
+  });
   $('btn-step2-next').addEventListener('click', () => {
     const num  = $('inp-num-albaran').value.trim();
     const prov = $('sel-proveedor').value;
-    if (!num)  { toast('Introduce el número de albarán.', 'warn'); return; }
-    if (!prov) { toast('Selecciona el proveedor.', 'warn'); return; }
-
-    S.numAlbaran  = num;
-    S.proveedorId = parseInt(prov, 10);
-    S.proveedorNom = $('sel-proveedor').selectedOptions[0]?.text ?? '';
-    S.ubicacionId  = parseInt($('sel-ubicacion').value || '0', 10);
-    S.ubicacionNom = $('sel-ubicacion').selectedOptions[0]?.text ?? 'Sin asignar';
-
+    if (!num)  { toast('Introduce el número de albarán.','warn'); return; }
+    if (!prov) { toast('Selecciona o crea el proveedor.','warn'); return; }
+    S.numAlbaran   = num;
+    S.proveedorId  = parseInt(prov,10);
+    S.proveedorNom = $('sel-proveedor').selectedOptions[0]?.text??'';
+    S.bodegaId     = parseInt($('sel-ubicacion').value||'0',10);
+    S.bodegaNom    = $('sel-ubicacion').selectedOptions[0]?.text??'Sin asignar';
     goStep(3);
-    setTimeout(() => $('input-ean')?.focus(), 200);
+    setTimeout(()=>$('input-ean')?.focus(),200);
   });
+  $('btn-modal-prov-cancel').addEventListener('click', cerrarModalProveedor);
+  document.getElementById('btn-modal-prov-cancel2')?.addEventListener('click', cerrarModalProveedor);
+  $('btn-modal-prov-save').addEventListener('click', guardarProveedor);
+  $('modal-proveedor').addEventListener('click', e => { if(e.target===$('modal-proveedor')) cerrarModalProveedor(); });
+  document.getElementById('btn-modal-ocr-close')?.addEventListener('click', () => $('modal-ocr-raw').classList.add('hidden'));
+  $('modal-ocr-raw')?.addEventListener('click', e => { if(e.target===$('modal-ocr-raw')) $('modal-ocr-raw').classList.add('hidden'); });
+}
+
+function abrirModalProveedor() { $('modal-prov-error').classList.add('hidden'); $('modal-proveedor').classList.remove('hidden'); setTimeout(()=>$('inp-prov-nombre').focus(),80); }
+function cerrarModalProveedor() { $('modal-proveedor').classList.add('hidden'); $('sel-proveedor').value=''; }
+
+async function guardarProveedor() {
+  const nombre=$('inp-prov-nombre').value.trim();
+  const errEl=$('modal-prov-error'), btn=$('btn-modal-prov-save');
+  errEl.classList.add('hidden');
+  if (!nombre) { errEl.textContent='La razón social es obligatoria.'; errEl.classList.remove('hidden'); return; }
+  btn.disabled=true; btn.textContent='Guardando…';
+  try {
+    const res = await Api.createSupplier({
+      fiscal_name:     nombre,
+      commercial_name: $('inp-prov-comercial').value.trim() || nombre,
+      fiscal_id:       $('inp-prov-nif').value.trim()       || undefined,
+      email:           $('inp-prov-email').value.trim()     || undefined,
+      phone:           $('inp-prov-telefono').value.trim()  || undefined,
+      address:         $('inp-prov-direccion').value.trim() || undefined,
+    });
+    const nuevo = res.data?.interlocutor??{};
+    const nuevoId = nuevo.id??nuevo.interlocutor_id;
+    const nuevoNom = nuevo.commercial_name||nuevo.fiscal_name||nombre;
+    S.suppliers.push({id:nuevoId, commercial_name:nuevoNom});
+    const opt = document.createElement('option');
+    opt.value=nuevoId; opt.textContent=nuevoNom; opt.selected=true;
+    $('sel-proveedor').appendChild(opt);
+    cerrarModalProveedor();
+    toast(`Proveedor "${nuevoNom}" creado.`,'ok');
+  } catch(err) {
+    errEl.textContent = err.error||'Error al crear proveedor.';
+    errEl.classList.remove('hidden');
+  } finally { btn.disabled=false; btn.textContent='Crear proveedor'; }
 }
 
 /* ══════════════════════════════════════════════════════
    11. PASO 3 — Escanear productos
+   Campo SKU v6.6.0: sku_final_code (con fallback a sku_code)
 ══════════════════════════════════════════════════════ */
 function initStep3() {
   $('btn-step3-back').addEventListener('click', () => goStep(2));
   $('btn-step3-next').addEventListener('click', () => {
-    if (!S.items.length) { toast('Añade al menos un producto.', 'warn'); return; }
-    rellenarResumen();
-    goStep(4);
+    if (!S.items.length) { toast('Añade al menos un producto.','warn'); return; }
+    rellenarResumen(); goStep(4);
   });
-
-  const ean = $('input-ean');
-  ean.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); resolverEan(ean.value.trim()); }
-  });
-  $('btn-scan').addEventListener('click', () => resolverEan(ean.value.trim()));
-
-  let _dt = null;
+  const ean=$('input-ean');
+  ean.addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault();resolverEan(ean.value.trim());} });
+  $('btn-scan').addEventListener('click', ()=>resolverEan(ean.value.trim()));
+  let _dt=null;
   ean.addEventListener('input', e => {
-    clearTimeout(_dt);
-    const q = e.target.value.trim();
-    if (q.length < 2) { cerrarDD(); return; }
-    _dt = setTimeout(() => renderDD(q), 200);
+    clearTimeout(_dt); const q=e.target.value.trim();
+    if (q.length<2){cerrarDD();return;}
+    _dt=setTimeout(()=>renderDD(q),200);
   });
-
   $('inp-qty').addEventListener('input', actualizarConv);
   $('sel-uc').addEventListener('change',  actualizarConv);
   $('btn-add-item').addEventListener('click', añadirItem);
   $('btn-conv-cancel').addEventListener('click', cerrarConv);
-
-  document.addEventListener('click', e => {
-    if (!$('ean-wrap')?.contains(e.target)) cerrarDD();
-  });
+  document.addEventListener('click', e=>{ if(!$('ean-wrap')?.contains(e.target)) cerrarDD(); });
 }
 
 function resolverEan(code) {
-  cerrarDD();
-  if (!code) return;
+  cerrarDD(); if (!code) return;
   const sku = S.byEan[code] ?? S.skus.find(s =>
-    (s.sku_code ?? '').toLowerCase() === code.toLowerCase() ||
-    (s.name     ?? '').toLowerCase().includes(code.toLowerCase())
+    (s.sku_final_code||s.sku_code||'').toLowerCase()===code.toLowerCase() ||
+    (s.name||'').toLowerCase().includes(code.toLowerCase())
   );
-  if (sku) { abrirConv(sku); $('input-ean').value = ''; }
-  else     toast(`"${code}" no encontrado en el catálogo.`, 'error');
+  if (sku) { abrirConv(sku); $('input-ean').value=''; }
+  else toast(`"${code}" no encontrado en el catálogo.`,'error');
 }
 
 function renderDD(q) {
-  const ql  = q.toLowerCase();
-  const res = S.skus.filter(s =>
-    (s.name     ?? '').toLowerCase().includes(ql) ||
-    (s.ean13    ?? '').startsWith(q) ||
-    (s.sku_code ?? '').toLowerCase().startsWith(ql)
-  ).slice(0, 8);
-
-  const dd = $('ean-dropdown');
-  if (!res.length) { cerrarDD(); return; }
-  dd.innerHTML = res.map(s => `
-    <div class="dd-row flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-ink-50 border-b border-ink-100 last:border-0"
-         data-id="${esc(s.id)}">
+  const ql=q.toLowerCase();
+  const res=S.skus.filter(s=>
+    (s.name||'').toLowerCase().includes(ql)||
+    (s.ean13||'').startsWith(q)||
+    (s.sku_final_code||s.sku_code||'').toLowerCase().startsWith(ql)
+  ).slice(0,8);
+  const dd=$('ean-dropdown');
+  if (!res.length){cerrarDD();return;}
+  dd.innerHTML=res.map(s=>`
+    <div class="dd-row flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-ink-50 border-b border-ink-100 last:border-0" data-id="${esc(s.id)}">
       <div class="min-w-0">
-        <p class="text-sm font-medium text-ink-900 truncate">${esc(s.name ?? '—')}</p>
-        <p class="text-xs text-ink-500 font-mono">${esc(s.sku_code ?? '')} · EAN ${esc(s.ean13 ?? '—')} · ${esc(s.unit_of_measure ?? '—')}</p>
+        <p class="text-sm font-medium text-ink-900 truncate">${esc(s.name||'—')}</p>
+        <p class="text-xs text-ink-500 font-mono">${esc(s.sku_final_code||s.sku_code||'')} · EAN ${esc(s.ean13||'—')} · ${esc(s.unit_of_measure||'—')}</p>
       </div>
     </div>`).join('');
   dd.classList.remove('hidden');
-  dd.querySelectorAll('.dd-row').forEach(el => {
-    el.addEventListener('click', () => {
-      const s = S.byId[el.dataset.id];
-      if (s) { abrirConv(s); $('input-ean').value = ''; }
-      cerrarDD();
-    });
+  dd.querySelectorAll('.dd-row').forEach(el=>{
+    el.addEventListener('click',()=>{const s=S.byId[el.dataset.id];if(s){abrirConv(s);$('input-ean').value='';}cerrarDD();});
   });
 }
 
-const cerrarDD  = () => $('ean-dropdown').classList.add('hidden');
-const cerrarConv = () => {
-  $('conv-panel').classList.add('hidden');
-  $('input-ean').value = '';
-  $('input-ean').focus();
-};
+const cerrarDD   = () => $('ean-dropdown').classList.add('hidden');
+const cerrarConv = () => { $('conv-panel').classList.add('hidden'); $('input-ean').value=''; $('input-ean').focus(); };
 
 function abrirConv(sku) {
-  const ub = (sku.unit_of_measure ?? 'ud').toLowerCase();
-  $('conv-nombre').textContent = sku.name ?? '—';
-  $('conv-meta').textContent   = `SKU: ${sku.sku_code ?? '—'} · EAN: ${sku.ean13 ?? '—'} · Base: ${ub}`;
-  $('hid-sku-id').value   = sku.id ?? '';
-  $('hid-sku-ean').value  = sku.ean13 ?? '';
+  const ub=(sku.unit_of_measure||'ud').toLowerCase();
+  // v6.6.0: campo correcto es sku_final_code
+  const skuCode = sku.sku_final_code || sku.sku_code || '—';
+  $('conv-nombre').textContent = sku.name||'—';
+  $('conv-meta').textContent   = `SKU: ${skuCode} · EAN: ${sku.ean13||'—'} · Base: ${ub}`;
+  $('hid-sku-id').value   = sku.id||'';
+  $('hid-sku-ean').value  = sku.ean13||'';
   $('hid-sku-ub').value   = ub;
-  $('hid-sku-name').value = sku.name ?? '';
-
-  const sel  = $('sel-uc');
-  sel.innerHTML = (UC_OPTS[ub] ?? UC_OPTS.ud).map(o => `<option value="${o.v}">${o.l}</option>`).join('');
-  sel.value = ub;
-
+  $('hid-sku-name').value = sku.name||'';
+  const sel=$('sel-uc');
+  sel.innerHTML=(UC_OPTS[ub]||UC_OPTS.ud).map(o=>`<option value="${o.v}">${o.l}</option>`).join('');
+  sel.value=ub;
   $('inp-lote').value  = genLote();
   $('inp-vence').value = '';
   $('inp-qty').value   = '';
   $('conv-res').textContent    = '—';
   $('conv-res-ub').textContent = ub;
   $('conv-panel').classList.remove('hidden');
-  setTimeout(() => $('inp-qty').focus(), 80);
+  setTimeout(()=>$('inp-qty').focus(),80);
 }
 
 function actualizarConv() {
-  const qty  = $('inp-qty').value;
-  const uc   = $('sel-uc').value;
-  const ub   = $('hid-sku-ub').value;
-  const base = convertir(qty, ub, uc);
-  $('conv-res').textContent = (qty && parseFloat(qty) > 0) ? base.toLocaleString('es-ES') : '—';
+  const base=convertir($('inp-qty').value,$('hid-sku-ub').value,$('sel-uc').value);
+  $('conv-res').textContent=(parseFloat($('inp-qty').value)>0)?base.toLocaleString('es-ES'):'—';
 }
 
 function añadirItem() {
-  const qty   = parseFloat($('inp-qty').value);
-  const uc    = $('sel-uc').value;
-  const ub    = $('hid-sku-ub').value;
-  const lote  = $('inp-lote').value.trim();
-  const vence = $('inp-vence').value;
+  const qty=parseFloat($('inp-qty').value), uc=$('sel-uc').value, ub=$('hid-sku-ub').value;
+  const lote=$('inp-lote').value.trim(), vence=$('inp-vence').value;
+  if (!qty||qty<=0)              {toast('Cantidad > 0','warn');return;}
+  if (!lote)                     {toast('Código de lote obligatorio.','warn');return;}
+  if (!vence)                    {toast('Fecha de vencimiento obligatoria.','warn');return;}
+  if (new Date(vence)<=new Date()){toast('Fecha de vencimiento inválida.','warn');return;}
 
-  if (!qty || qty <= 0)         { toast('La cantidad debe ser mayor que cero.', 'warn'); return; }
-  if (!lote)                    { toast('El código de lote es obligatorio.', 'warn'); return; }
-  if (!vence)                   { toast('La fecha de vencimiento es obligatoria.', 'warn'); return; }
-  if (new Date(vence) <= new Date()) { toast('La fecha de vencimiento no puede ser anterior o igual a hoy.', 'warn'); return; }
-
-  const quantity = convertir(qty, ub, uc);
   S.items.push({
-    skuId:         parseInt($('hid-sku-id').value, 10),
+    skuId:         parseInt($('hid-sku-id').value,10),
     ean:           $('hid-sku-ean').value,
     nombre:        $('hid-sku-name').value,
-    unidadBase:    ub,
-    quantity,
-    batchRef:      lote,
-    expDate:       vence,
-    labelComercial: `${qty} ${uc}`,
+    unidadBase:    ub, quantity: convertir(qty,ub,uc),
+    batchRef:      lote, expDate: vence, labelComercial:`${qty} ${uc}`,
   });
-
-  renderItemsTable();
-  cerrarConv();
-  toast(`"${$('hid-sku-name').value}" añadido.`, 'ok');
+  renderItemsTable(); cerrarConv();
+  toast(`"${$('hid-sku-name').value}" añadido.`,'ok');
 }
 
 function renderItemsTable() {
-  const tbody = $('items-tbody');
-  const wrap  = $('items-table-wrap');
-  const badge = $('item-count-badge');
-  const btnNext = $('btn-step3-next');
-
-  badge.textContent = S.items.length;
-  badge.classList.toggle('hidden', S.items.length === 0);
-  btnNext.disabled  = S.items.length === 0;
-
-  if (!S.items.length) { wrap.classList.add('hidden'); return; }
-  wrap.classList.remove('hidden');
-  $('items-count').textContent = S.items.length;
-
-  tbody.innerHTML = '';
-  S.items.forEach((it, idx) => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>
-        <p class="font-medium text-ink-900">${esc(it.nombre)}</p>
-        <p class="text-xs text-ink-400 font-mono mt-0.5">${esc(it.labelComercial)}</p>
-      </td>
-      <td class="text-right font-mono font-semibold text-ink-900">
-        ${it.quantity.toLocaleString('es-ES')} ${esc(it.unidadBase)}
-      </td>
-      <td class="font-mono text-xs text-ink-600">${esc(it.batchRef)}</td>
-      <td class="text-ink-600">${fmtDate(it.expDate)}</td>
-      <td>
-        <button class="del-item text-ink-400 hover:text-danger transition-colors p-1" data-idx="${idx}">
-          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
-          </svg>
-        </button>
-      </td>`;
+  const tbody=$('items-tbody'), wrap=$('items-table-wrap');
+  const badge=$('item-count-badge'), btnNext=$('btn-step3-next');
+  badge.textContent=S.items.length; badge.classList.toggle('hidden',S.items.length===0);
+  btnNext.disabled=S.items.length===0;
+  if (!S.items.length){wrap.classList.add('hidden');return;}
+  wrap.classList.remove('hidden'); $('items-count').textContent=S.items.length;
+  tbody.innerHTML='';
+  S.items.forEach((it,idx)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><p class="font-medium text-ink-900">${esc(it.nombre)}</p><p class="text-xs text-ink-400 font-mono mt-0.5">${esc(it.labelComercial)}</p></td><td class="text-right font-mono font-semibold text-ink-900">${it.quantity.toLocaleString('es-ES')} ${esc(it.unidadBase)}</td><td class="font-mono text-xs text-ink-600">${esc(it.batchRef)}</td><td class="text-ink-600">${fmtDate(it.expDate)}</td><td><button class="del-item text-ink-400 hover:text-danger transition-colors p-1" data-idx="${idx}"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button></td>`;
     tbody.appendChild(tr);
   });
-
-  tbody.querySelectorAll('.del-item').forEach(btn => {
-    btn.addEventListener('click', () => {
-      S.items.splice(parseInt(btn.dataset.idx), 1);
-      renderItemsTable();
-    });
-  });
+  tbody.querySelectorAll('.del-item').forEach(b=>b.addEventListener('click',()=>{
+    S.items.splice(parseInt(b.dataset.idx),1);renderItemsTable();
+  }));
 }
 
 /* ══════════════════════════════════════════════════════
    12. PASO 4 — Resumen y confirmación
+   Flujo v6.6.0: purchasing_order → purchasing_order_line → receive (batch inline)
 ══════════════════════════════════════════════════════ */
 function rellenarResumen() {
-  $('sum-num-albaran').textContent = S.numAlbaran;
-  $('sum-proveedor').textContent   = S.proveedorNom || `ID ${S.proveedorId}`;
-  $('sum-ubicacion').textContent   = S.ubicacionNom;
-
-  // Tabla resumen
-  const tbody = $('summary-tbody');
-  tbody.innerHTML = '';
-  S.items.forEach(it => {
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>
-        <p class="font-medium text-ink-900">${esc(it.nombre)}</p>
-        <p class="text-xs text-ink-400 font-mono">${esc(it.labelComercial)} → ${it.quantity.toLocaleString('es-ES')} ${esc(it.unidadBase)}</p>
-      </td>
-      <td class="text-right font-mono font-semibold">${it.quantity.toLocaleString('es-ES')} ${esc(it.unidadBase)}</td>
-      <td class="text-ink-600">${fmtDate(it.expDate)}</td>`;
+  $('sum-num-albaran').textContent=S.numAlbaran;
+  $('sum-proveedor').textContent=S.proveedorNom||`ID ${S.proveedorId}`;
+  $('sum-ubicacion').textContent=S.bodegaNom||'Sin asignar';
+  const tbody=$('summary-tbody'); tbody.innerHTML='';
+  S.items.forEach(it=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><p class="font-medium text-ink-900">${esc(it.nombre)}</p><p class="text-xs text-ink-400 font-mono">${esc(it.labelComercial)} → ${it.quantity.toLocaleString('es-ES')} ${esc(it.unidadBase)}</p></td><td class="text-right font-mono font-semibold">${it.quantity.toLocaleString('es-ES')} ${esc(it.unidadBase)}</td><td class="text-ink-600">${fmtDate(it.expDate)}</td>`;
     tbody.appendChild(tr);
   });
-
-  // Documento adjunto
   if (S.docB64) {
     $('sum-doc-wrap').classList.remove('hidden');
     if (S.docB64.startsWith('data:image')) {
-      $('sum-doc-img').src = S.docB64; $('sum-doc-img').classList.remove('hidden'); $('sum-doc-pdf').classList.add('hidden');
+      $('sum-doc-img').src=S.docB64; $('sum-doc-img').classList.remove('hidden'); $('sum-doc-pdf').classList.add('hidden');
     } else {
-      $('sum-doc-nom').textContent = S.docNombre ?? 'documento.pdf';
+      $('sum-doc-nom').textContent=S.docNombre??'documento.pdf';
       $('sum-doc-pdf').classList.remove('hidden'); $('sum-doc-img').classList.add('hidden');
     }
-  } else {
-    $('sum-doc-wrap').classList.add('hidden');
-  }
-
+  } else $('sum-doc-wrap').classList.add('hidden');
   $('confirm-error').classList.add('hidden');
 }
 
 function initStep4() {
-  $('btn-step4-back').addEventListener('click', () => goStep(3));
+  $('btn-step4-back').addEventListener('click',()=>goStep(3));
 
   $('btn-confirm').addEventListener('click', async () => {
-    const btn   = $('btn-confirm');
-    const label = $('btn-confirm-label');
-    const spin  = $('btn-confirm-spin');
-    const errEl = $('confirm-error');
-
-    btn.disabled = true;
-    label.textContent = 'Registrando…';
-    spin.classList.remove('hidden');
+    const btn=$('btn-confirm'), label=$('btn-confirm-label'), spin=$('btn-confirm-spin');
+    const errEl=$('confirm-error');
+    btn.disabled=true; label.textContent='Registrando…'; spin.classList.remove('hidden');
     errEl.classList.add('hidden');
 
     try {
-      // Por cada ítem: crear lote → recepción
+      // ── PASO A: Crear cabecera del albarán (/purchasing/orders)
+      const orderRes = await Api.purchasingOrder({
+        supplier_id:       S.proveedorId,
+        interlocutor_id:   S.interlocutorId,
+        reference:         S.numAlbaran,
+        expected_delivery: null,
+      });
+      const orderId = orderRes.data?.order?.id ?? orderRes.data?.id;
+      S.purchaseOrderId = orderId;
+
+      // ── PASO B: Añadir líneas + recepción física por cada ítem
       for (const item of S.items) {
+        // Línea de la orden de compra
+        if (orderId) {
+          await Api.purchasingOrderLine({
+            order_id:         orderId,
+            item_id:          item.skuId,
+            item_type:        'sku',
+            quantity_ordered: item.quantity,
+            unit_price:       0,
+          }).catch(()=>{}); // no crítico si falla
+        }
 
-        // 1. Crear lote
-        const batchRes = await Api.batch({
-          batch_reference: item.batchRef,
-          item_id:         item.skuId,
-          item_type:       'sku',
-          expiration_date: item.expDate,
-          cost_per_unit:   0,
-        });
-
-        const batchId = batchRes.data?.batch?.id
-          ?? batchRes.data?.batch?.batch_id
-          ?? batchRes.data?.id;
-
-        if (!batchId) throw { error: `Lote creado sin ID para "${item.nombre}".` };
-
-        // 2. Registrar recepción
+        // ── PASO C: Recepción física con batch inline (UNA sola llamada, v6.6.0)
         await Api.receive({
-          location_id:        S.ubicacionId || 1,
-          batch_id:           batchId,
+          location_id:        S.bodegaId || 1,
           item_id:            item.skuId,
           item_type:          'sku',
+          batch: {
+            batch_reference: item.batchRef,
+            expiration_date: item.expDate,
+            cost_per_unit:   0,
+          },
           quantity:           item.quantity,
           movement_type:      'Compra',
           reference_document: S.numAlbaran,
         });
       }
 
-      // Todo OK → éxito
-      $('success-msg').textContent =
-        `Albarán ${S.numAlbaran} — ${S.items.length} producto${S.items.length !== 1 ? 's' : ''} ingresado${S.items.length !== 1 ? 's' : ''} en el kardex.`;
-      [1,2,3,4].forEach(i => $(`step-${i}`)?.classList.add('hidden'));
+      // Éxito
+      $('success-msg').textContent=`Albarán ${S.numAlbaran} — ${S.items.length} producto${S.items.length!==1?'s':''} ingresado${S.items.length!==1?'s':''} en el kardex.`;
+      [1,2,3,4].forEach(i=>$(`step-${i}`)?.classList.add('hidden'));
       $('step-success').classList.remove('hidden');
 
     } catch (err) {
+      // Propagar error_code OMNI con mensaje útil
+      let msg = err.error ?? 'Error al registrar.';
+      if (err.code === 'ERR_STOCK')     msg = 'Stock insuficiente para esta operación.';
+      if (err.code === 'ERR_KARDEX')    msg = 'Tipo de movimiento no permitido en el Kardex.';
+      if (err.code === 'ERR_DUPLICATE') msg = 'Este albarán ya fue registrado anteriormente.';
+      if (err.code === 'ERR_AUTH')      { _logout(); return; }
       errEl.classList.remove('hidden');
-      $('confirm-error-msg').textContent = err.error ?? 'Error al registrar. Inténtalo de nuevo.';
+      $('confirm-error-msg').textContent = msg;
     } finally {
-      btn.disabled = false;
-      label.textContent = 'Registrar albarán';
-      spin.classList.add('hidden');
+      btn.disabled=false; label.textContent='Registrar albarán'; spin.classList.add('hidden');
     }
   });
 }
 
 /* ══════════════════════════════════════════════════════
-   13. LOGOUT + RESET
+   13. RESET + LOGOUT
 ══════════════════════════════════════════════════════ */
 function resetFormulario() {
-  S.docB64 = null; S.docNombre = null;
-  S.numAlbaran = ''; S.proveedorId = 0; S.ubicacionId = 0; S.items = [];
-  $('file-input').value     = '';
-  $('inp-num-albaran').value = '';
-  $('sel-proveedor').value  = '';
-  $('sel-ubicacion').value  = '';
-  $('input-ean').value      = '';
-  $('dz-idle').classList.remove('hidden');
-  $('dz-preview').classList.add('hidden');
-  $('btn-clear-doc').classList.add('hidden');
-  $('btn-step1-next').disabled = true;
-  $('conv-panel').classList.add('hidden');
-  $('items-table-wrap').classList.add('hidden');
-  $('items-tbody').innerHTML = '';
-  $('btn-step3-next').disabled = true;
+  S.docB64=null; S.docNombre=null; S.ocrData=null; S.purchaseOrderId=null;
+  S.numAlbaran=''; S.proveedorId=0; S.bodegaId=0; S.items=[];
+  $('file-input').value=''; $('inp-num-albaran').value=''; $('sel-proveedor').value='';
+  $('input-ean').value='';
+  $('dz-idle').classList.remove('hidden'); $('dz-preview').classList.add('hidden');
+  $('btn-clear-doc').classList.add('hidden'); $('btn-step1-next').disabled=true;
+  $('conv-panel').classList.add('hidden'); $('items-table-wrap').classList.add('hidden');
+  $('items-tbody').innerHTML=''; $('btn-step3-next').disabled=true;
   $('item-count-badge').classList.add('hidden');
+  $('ocr-panel').classList.add('hidden');
+  poblarSelectBodega();
   goStep(1);
+}
+
+function _logout() {
+  Api.clearSession(); S.user=null; S.interlocutorId=0; S.sedePrincipalId=0;
+  resetFormulario(); showView('view-login');
 }
 
 /* ══════════════════════════════════════════════════════
    14. BOOTSTRAP
 ══════════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
+  $('btn-logout').addEventListener('click', _logout);
+  $('btn-nuevo').addEventListener('click',  resetFormulario);
+  initStep1(); initStep2(); initStep3(); initStep4();
 
-  // Botón logout
-  $('btn-logout').addEventListener('click', () => {
-    Api.clearSession();
-    S.user = null; S.interlocutorId = 0;
-    resetFormulario();
-    showView('view-login');
-  });
-
-  // Botón "Nuevo albarán" en pantalla de éxito
-  $('btn-nuevo').addEventListener('click', () => {
-    resetFormulario();
-  });
-
-  // Inicializar listeners de cada paso
-  initStep1();
-  initStep2();
-  initStep3();
-  initStep4();
-
-  // ¿Hay sesión guardada? → entrar directo
-  if (Api._token && Api._interlocutorId) {
-    S.interlocutorId = Api._interlocutorId;
-
-    // Intentar recuperar datos de usuario del JWT (solo display)
+  if (Api._token && Api._iid) {
+    S.interlocutorId=Api._iid; S.sedePrincipalId=Api._iid;
     try {
-      const pay = JSON.parse(atob(Api._token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
-      S.user = pay;
-      $('hdr-nombre').textContent = pay.nombre || pay.full_name || pay.username || '—';
-      $('hdr-sede').textContent   = pay.sede || pay.interlocutor_name || `Sede ${S.interlocutorId}`;
+      const pay=JSON.parse(atob(Api._token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+      $('hdr-nombre').textContent = pay.username||pay.nombre||'—';
+      $('hdr-sede').textContent   = pay.interlocutor_name||pay.sede||`Sede ${S.interlocutorId}`;
     } catch(_) {}
-
-    cargarCatalogos().then(() => {
-      showView('view-app');
-      goStep(1);
-      // Actualizar fecha
-      $('lbl-fecha').textContent = new Date().toLocaleString('es-ES', {
-        day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'
-      });
+    cargarCatalogos().then(()=>{
+      showView('view-app'); goStep(1);
+      $('lbl-fecha').textContent=new Date().toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
     });
   } else {
     showView('view-login');
     initLoginView();
     return;
   }
-
-  // Si no hay sesión, la vista login necesita inicializarse
   initLoginView();
 });
