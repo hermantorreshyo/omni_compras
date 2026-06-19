@@ -1,0 +1,24 @@
+# JOSEPAN 360 · [1002] Albaranes v6
+Options -Indexes
+AddType application/javascript .js
+AddType application/json .json
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # ⚠ Ajusta a tu ruta real (lo que va después de localhost/)
+    RewriteBase /josepan/360/omni/dev/1002_04/
+
+    # Servir archivos reales directamente
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # SPA fallback
+    RewriteRule ^ index.html [L]
+</IfModule>
+
+<FilesMatch "\.(js|css|html|php)$">
+    <IfModule mod_headers.c>
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+    </IfModule>
+</FilesMatch>
