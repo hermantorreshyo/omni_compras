@@ -22,18 +22,22 @@
 ══════════════════════════════════════════════════════ */
 const Api = {
   _base:  'api/omni.php',
-  _token: localStorage.getItem('omni_token') || '',
-  _iid:   parseInt(localStorage.getItem('omni_iid') || '0', 10),
+  _token: sessionStorage.getItem('omni_token') || localStorage.getItem('omni_token') || '',
+  _iid:   parseInt(sessionStorage.getItem('omni_iid') || localStorage.getItem('omni_iid') || '0', 10),
 
   setSession(token, iid) {
-    this._token = token; this._iid = iid;
+    this._token = token; this._iid = iid || 0;
     localStorage.setItem('omni_token', token);
-    localStorage.setItem('omni_iid',   String(iid));
+    localStorage.setItem('omni_iid',   String(iid || 0));
+    sessionStorage.setItem('omni_token', token);
+    sessionStorage.setItem('omni_iid',   String(iid || 0));
   },
   clearSession() {
     this._token = ''; this._iid = 0;
     localStorage.removeItem('omni_token');
     localStorage.removeItem('omni_iid');
+    sessionStorage.removeItem('omni_token');
+    sessionStorage.removeItem('omni_iid');
   },
   _headers() {
     const h = { 'Content-Type': 'application/json' };
@@ -832,7 +836,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btn-nuevo').addEventListener('click',  resetFormulario);
   initStep1(); initStep2(); initStep3(); initStep4();
 
-  if (Api._token && Api._iid) {
+  if (Api._token) {  // iid puede ser 0 si el API devuelve interlocutor_id: null
     S.interlocutorId=Api._iid; S.sedePrincipalId=Api._iid;
     try {
       const pay=JSON.parse(atob(Api._token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
