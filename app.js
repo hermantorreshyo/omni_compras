@@ -728,7 +728,10 @@ function _bindOcrCardListeners() {
   });
 
   container.querySelectorAll('.ocr-buscar-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+      // El botón vive fuera de #ean-wrap: si el click burbujea hasta document,
+      // el listener "click fuera de ean-wrap" cierra el dropdown que acabamos de abrir.
+      e.stopPropagation();
       const desc = btn.dataset.desc || '';
       // Buscar en el catálogo y mostrar dropdown
       $('input-ean').value = desc.split(' ').slice(0,4).join(' ');

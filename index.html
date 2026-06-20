@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>JOSEPAN 360 · Albaranes de Compras [1002]</title>
 
-  <link rel="stylesheet" href="styles.css?v=20260622" />
+  <link rel="stylesheet" href="styles.css?v=20260630" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
@@ -936,7 +936,7 @@
 <script>
   // Cache-busting: añade timestamp para forzar recarga en cada deploy
   // En producción, reemplazar por el número de versión del release (ej: ?v=2.0.0)
-  const appVersion = '20260630';  // v21 — fix bootstrap: readyState guard (DOMContentLoaded ya disparado)  // ← actualizar en cada deploy
+  const appVersion = '20260630b';  // v22 — fix: btn-buscar-catalogo cerraba su propio dropdown (stopPropagation)  // ← actualizar en cada deploy
   const s = document.createElement('script');
   s.src = 'app.js?v=' + appVersion;
   document.head.appendChild(s);
