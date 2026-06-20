@@ -515,7 +515,7 @@ function parseOcrQuantity(cantStr, sku) {
   const num = parseFloat(match[1]);
   if (isNaN(num) || num <= 0) return null;
 
-  const ub    = (sku?.unit_of_measure || typeof sku === 'string' ? (sku || 'ud') : 'ud').toLowerCase();
+  const ub    = (sku?.unit_of_measure || 'ud').toLowerCase();
   const lower = str.toLowerCase();
 
   // SKU en UNIDADES FÍSICAS — devolver el número sin conversión
