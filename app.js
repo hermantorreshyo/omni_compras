@@ -121,6 +121,7 @@ const Api = {
 const S = {
   // Sesión
   user: null, interlocutorId: Api._iid, sedePrincipalId: 0,
+  _pendingUsername: null, _pendingPassword: null,
   sedeName: '', role: '', permissions: [],
 
   // Catálogos
@@ -270,70 +271,27 @@ async function initLoginView() {
       errEl.classList.remove('hidden'); return;
     }
 
-    btn.disabled = true;
-    $('btn-login-label').textContent = 'Verificando…';
-    $('btn-login-spin').classList.remove('hidden');
+    // Guardar credenciales temporalmente para usarlas tras elegir la sede
+    S._pendingUsername = username;
+    S._pendingPassword = password;
 
-    try {
-      // Login con interlocutor_id=1 (empresa raíz)
-      // La sede real se elige en la pantalla siguiente con el token ya disponible
-      const r = await Api.login(username, password, 1);
-      const d = r.data;
-
-      // Guardar token — sin sede aún
-      Api._token = d.token;
-      sessionStorage.setItem('omni_token', d.token);
-      localStorage.setItem('omni_token', d.token);
-      S.user        = d;
-      S.role        = d.role        ?? '';
-      S.permissions = d.permissions ?? [];
-
-      $('sede-hdr-nombre').textContent = d.username ?? username;
-      $('sede-hdr-nombre').classList.remove('hidden');
-
-      // Ir a pantalla de selección de sede
-      showView('view-sede');
-      // Cargar sedes CON el token ya disponible → 100% fiable
-      _cargarSedesConToken();
-
-    } catch (err) {
-      errEl.textContent =
-        err.code === 'ERR_AUTH'    ? 'Usuario o contraseña incorrectos.' :
-        err.code === 'ERR_NETWORK' ? 'Sin conexión con el servidor.' :
-        (err.error || 'Error al iniciar sesión.');
-      errEl.classList.remove('hidden');
-    } finally {
-      btn.disabled = false;
-      $('btn-login-label').textContent = 'Entrar';
-      $('btn-login-spin').classList.add('hidden');
-    }
+    // Mostrar pantalla de selección de sede con lista estática inmediata
+    showView('view-sede');
+    _cargarSedesVista();
   });
 }
 
-/** Carga la lista de sedes usando el token ya obtenido — siempre funciona */
-async function _cargarSedesConToken() {
+/** Muestra sedes estáticas inmediatamente, actualiza desde el API si es posible */
+function _cargarSedesVista() {
   const sel = $('sel-sede');
-  sel.innerHTML = '<option value="">— Cargando sedes… —</option>';
-  try {
-    const r     = await Api.allInterlocutors();
-    const items = r.data?.items ?? [];
-    sel.innerHTML = '<option value="">— Seleccionar sede —</option>';
-    if (!items.length) { _fallbackSedes(sel); return; }
-    items.forEach(i => {
-      const o = document.createElement('option');
-      o.value = i.id;
-      o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
-      sel.appendChild(o);
-    });
-  } catch(_) {
-    _fallbackSedes(sel);
-  }
+  // Fallback estático SIEMPRE primero — visible instantáneamente
+  _fallbackSedes(sel);
 }
 
 /** Inicializa la vista de selección de sede */
 function initSedeView() {
   $('btn-sede-logout')?.addEventListener('click', () => {
-    Api.clearSession(); S.user = null;
+    S._pendingUsername = null; S._pendingPassword = null;
     showView('view-login');
   });
 
@@ -353,16 +311,25 @@ function initSedeView() {
     const sedeNom = sel.selectedOptions[0]?.text ?? '';
 
     btn.disabled = true;
-    btn.textContent = 'Cargando…';
+    btn.innerHTML = '<svg class="spin w-4 h-4 mr-2 inline" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Entrando…';
 
     try {
-      Api.setSession(Api._token, sedeId);
-      S.interlocutorId  = sedeId;
-      S.sedePrincipalId = sedeId;
-      S.sedeName        = sedeNom;
+      // Login real con la sede elegida por el operario
+      const r = await Api.login(S._pendingUsername, S._pendingPassword, sedeId);
+      const d = r.data;
 
-      $('hdr-nombre').textContent = S.user?.username ?? '—';
-      $('hdr-sede').textContent   = sedeNom;
+      Api.setSession(d.token, d.interlocutor_id ?? sedeId);
+      S.user            = d;
+      S.interlocutorId  = d.interlocutor_id  ?? sedeId;
+      S.sedePrincipalId = S.interlocutorId;
+      S.sedeName        = d.interlocutor_name ?? sedeNom;
+      S.role            = d.role        ?? '';
+      S.permissions     = d.permissions ?? [];
+      S._pendingUsername = null;
+      S._pendingPassword = null;
+
+      $('hdr-nombre').textContent = d.username ?? S.user?.username ?? '—';
+      $('hdr-sede').textContent   = S.sedeName;
       $('lbl-fecha').textContent  = new Date().toLocaleString('es-ES',{
         day:'2-digit', month:'2-digit', year:'numeric',
         hour:'2-digit', minute:'2-digit'
@@ -373,7 +340,11 @@ function initSedeView() {
       showView('view-app'); goStep(1);
 
     } catch(err) {
-      errEl.textContent = err.error || 'Error al cargar la sede.';
+      const msg =
+        err.code === 'ERR_AUTH'    ? 'Credenciales incorrectas. Vuelve atrás e inténtalo de nuevo.' :
+        err.code === 'ERR_NETWORK' ? 'Sin conexión con el servidor.' :
+        (err.error || 'Error al autenticar.');
+      errEl.textContent = msg;
       errEl.classList.remove('hidden');
       btn.disabled = false;
       btn.textContent = 'Continuar';
@@ -391,6 +362,7 @@ function _fallbackSedes(sel) {
     const o = document.createElement('option'); o.value=id; o.textContent=nom; sel.appendChild(o);
   });
 }
+
 
 
 /* ══════════════════════════════════════════════════════
