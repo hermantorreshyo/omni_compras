@@ -138,22 +138,53 @@ const S = {
 };
 
 /* ══════════════════════════════════════════════════════
-   3. CONVERSIÓN METROLÓGICA
-   Siempre en unidad base (g / ml / ud). Math.round() elimina
-   errores de punto flotante antes de enviar al kardex.
+   3. CONVERSIÓN METROLÓGICA — §20 Manual OMNI v6.6.0
+   ──────────────────────────────────────────────────
+   REGLA FUNDAMENTAL:
+   La cantidad enviada al API es SIEMPRE en unidades físicas.
+   - unit_of_measure = 'g'  → se envían gramos
+   - unit_of_measure = 'ml' → se envían mililitros
+   - unit_of_measure = 'ud' → se envían unidades (bolsas, cajas…)
+     Si el SKU tiene pack_size > 1 (ej: 7000 g/bolsa),
+     el peso total = quantity × pack_size  (solo para mostrar)
+     PERO al API se envía quantity en unidades físicas.
 ══════════════════════════════════════════════════════ */
 const FACTORES = {
-  g:  { g:1,'100g':100,'500g':500,kg:1000,'5kg':5000,'25kg':25000,'50kg':50000,t:1000000 },
+  g:  { g:1,'100g':100,'500g':500,kg:1000,'2kg':2000,'5kg':5000,'25kg':25000,'50kg':50000,t:1000000 },
   ml: { ml:1,cl:10,'200ml':200,'500ml':500,l:1000,'5l':5000,'20l':20000 },
   ud: { ud:1,cj6:6,cj12:12,cj24:24,cj48:48 },
 };
 const UC_OPTS = {
-  g:  [{v:'g',l:'Gramos (g)'},{v:'100g',l:'Sobre 100 g'},{v:'500g',l:'Bolsa 500 g'},{v:'kg',l:'Kilogramo (1 kg)'},{v:'5kg',l:'Saco 5 kg'},{v:'25kg',l:'Saco 25 kg'},{v:'50kg',l:'Saco 50 kg'},{v:'t',l:'Tonelada'}],
-  ml: [{v:'ml',l:'Mililitros (ml)'},{v:'cl',l:'Centilitros'},{v:'200ml',l:'Botella 200 ml'},{v:'500ml',l:'Botella 500 ml'},{v:'l',l:'Litro (L)'},{v:'5l',l:'Garrafa 5 L'},{v:'20l',l:'Bidón 20 L'}],
-  ud: [{v:'ud',l:'Unidad suelta'},{v:'cj6',l:'Caja × 6'},{v:'cj12',l:'Caja × 12'},{v:'cj24',l:'Caja × 24'},{v:'cj48',l:'Caja × 48'}],
+  g:  [{v:'g',l:'Gramos (g)'},{v:'100g',l:'Sobre 100 g'},{v:'500g',l:'Bolsa 500 g'},{v:'kg',l:'Kilogramo (1 kg)'},{v:'2kg',l:'Sobre 2 kg'},{v:'5kg',l:'Saco 5 kg'},{v:'25kg',l:'Saco 25 kg'},{v:'50kg',l:'Saco 50 kg'},{v:'t',l:'Tonelada'}],
+  ml: [{v:'ml',l:'Mililitros'},{v:'cl',l:'Centilitros'},{v:'200ml',l:'Botella 200 ml'},{v:'500ml',l:'Botella 500 ml'},{v:'l',l:'Litro (L)'},{v:'5l',l:'Garrafa 5 L'},{v:'20l',l:'Bidón 20 L'}],
+  ud: [{v:'ud',l:'Unidades (ud)'}],
 };
-const convertir = (val, ub, uc) =>
-  Math.round((parseFloat(val) || 0) * (FACTORES[ub]?.[uc] ?? 1));
+
+/**
+ * convertir — para SKUs g/ml convierte el formato comercial a unidad base.
+ * Para SKUs ud: devuelve las unidades físicas directamente (sin multiplicar por pack_size).
+ */
+const convertir = (val, ub, uc) => {
+  if (ub === 'ud') return Math.round(parseFloat(val) || 0); // siempre unidades físicas
+  return Math.round((parseFloat(val) || 0) * (FACTORES[ub]?.[uc] ?? 1));
+};
+
+/**
+ * formatQuantity — §20 Manual OMNI v6.6.0
+ * Muestra la cantidad de forma legible según la unidad y pack_size del SKU.
+ * BRAUNGEL FRIO: formatQuantity(4, {unit_of_measure:'ud', pack_size:7000}) → "4 ud (28.00 kg)"
+ */
+function formatQuantity(quantity, sku) {
+  const ub = (sku?.unit_of_measure || 'ud').toLowerCase();
+  const ps = parseInt(sku?.pack_size || 1, 10);
+  if (ub === 'ud' && ps > 1) {
+    const totalG = quantity * ps;
+    return `${quantity} ud (${totalG >= 1000 ? (totalG/1000).toFixed(2) + ' kg' : totalG + ' g'})`;
+  }
+  if (ub === 'g')  return quantity >= 1000 ? (quantity/1000).toFixed(2) + ' kg' : quantity + ' g';
+  if (ub === 'ml') return quantity >= 1000 ? (quantity/1000).toFixed(2) + ' L'  : quantity + ' ml';
+  return quantity + ' ud';
+}
 
 /* ══════════════════════════════════════════════════════
    4. UTILIDADES
@@ -433,32 +464,63 @@ function matchSkuFromOcr(linea) {
  * La cantidad viene como string: "8,00 SCP 2KG", "6 AGP04", "4 C3P4", etc.
  * Extrae el número y lo convierte a la unidad base del SKU.
  */
-function parseOcrQuantity(cantStr, skuUnitOfMeasure) {
+/**
+ * parseOcrQuantity — extrae la cantidad de una cadena OCR y la convierte
+ * a la unidad que espera el API según §20 del manual.
+ *
+ * REGLA §20:
+ *   - SKU con unit_of_measure='ud' (ej: BRAUNGEL FRIO bolsa 7 kg):
+ *     el API espera UNIDADES FÍSICAS — devolver el número tal cual
+ *   - SKU con unit_of_measure='g':
+ *     el API espera GRAMOS — convertir si la cadena incluye "kg"
+ *   - SKU con unit_of_measure='ml':
+ *     el API espera ML — convertir si la cadena incluye "l" o "L"
+ *
+ * Ejemplos de cadenas OCR reales:
+ *   "8,00 SCP 2KG"  → SKU en g  → 8 × 2000 = 16000 g
+ *   "4 AGP05"       → SKU en ud → 4 ud
+ *   "6 C3P4"        → SKU en ud → 6 ud
+ *   "28,00 F.Cad"   → número bruto, usar solo el número
+ */
+function parseOcrQuantity(cantStr, sku) {
   if (!cantStr) return null;
-  // Extraer primer número (entero o decimal con , o .)
-  const match = cantStr.replace(',', '.').match(/^([\d.]+)/);
+  const str  = String(cantStr).replace(',', '.').trim();
+  const match = str.match(/^([\d.]+)/);
   if (!match) return null;
   const num = parseFloat(match[1]);
   if (isNaN(num) || num <= 0) return null;
 
-  // Si la cadena contiene unidad de peso/volumen, convertir
-  const lower = cantStr.toLowerCase();
-  const ub    = (skuUnitOfMeasure || 'ud').toLowerCase();
+  const ub    = (sku?.unit_of_measure || typeof sku === 'string' ? (sku || 'ud') : 'ud').toLowerCase();
+  const lower = str.toLowerCase();
 
+  // SKU en UNIDADES FÍSICAS — devolver el número sin conversión
+  if (ub === 'ud') return Math.round(num);
+
+  // SKU en GRAMOS — convertir si la cadena indica kg
   if (ub === 'g') {
-    if (lower.includes('kg'))  return Math.round(num * 1000);
-    if (lower.includes('2kg')) return Math.round(num * 2000);
-    if (lower.includes('5kg')) return Math.round(num * 5000);
-    if (lower.includes('25kg')) return Math.round(num * 25000);
-    // Si no hay unidad reconocida, asumir que el número ya es la cantidad de embalajes
-    // y la conversión la hace el usuario con el selector de formato
-    return Math.round(num);
+    // Detectar patrón "NUMkg" o "NUM kg" o "NUMKGN" del OCR
+    if (/\d+\s*kg/i.test(str)) {
+      // Extraer el kg que sigue al número principal ej: "8,00 SCP 2KG" → los 2KG son el pack
+      const kgMatch = str.match(/(\d+(?:[.,]\d+)?)\s*kg/i);
+      if (kgMatch) {
+        const kgPack = parseFloat(kgMatch[1].replace(',', '.'));
+        // Si el KG es el pack (aparece DESPUÉS del número de unidades):
+        // "8,00 SCP 2KG" → 8 bultos × 2 kg = 16000 g
+        if (kgPack > 0 && kgPack !== num) return Math.round(num * kgPack * 1000);
+        // Si KG es la cantidad directa: "2,5 KG" → 2500 g
+        return Math.round(num * 1000);
+      }
+    }
+    return Math.round(num); // ya en gramos
   }
+
+  // SKU en ML — convertir si la cadena indica litros
   if (ub === 'ml') {
-    if (lower.includes(' l') || lower.includes('litro')) return Math.round(num * 1000);
-    if (lower.includes('cl')) return Math.round(num * 10);
+    if (/ l|litro/i.test(str)) return Math.round(num * 1000);
+    if (/cl/i.test(str))       return Math.round(num * 10);
     return Math.round(num);
   }
+
   return Math.round(num);
 }
 
@@ -485,7 +547,7 @@ function _procesarLineasOcr(lineas) {
   lineas.forEach((linea, idx) => {
     const sku     = matchSkuFromOcr(linea);
     const cantRaw = (linea.cantidad_recibida || '').trim();
-    const qty     = sku ? parseOcrQuantity(cantRaw, sku.unit_of_measure) : null;
+    const qty     = sku ? parseOcrQuantity(cantRaw, sku) : null;  // §20: pasa SKU completo para pack_size
     const lote    = linea.lote            || '';
     const vence   = linea.fecha_caducidad || '';
     const desc    = linea.descripcion     || '—';
@@ -1153,12 +1215,18 @@ function abrirConv(sku) {
   const ub=(sku.unit_of_measure||'ud').toLowerCase();
   // v6.6.0: campo correcto es sku_final_code
   const skuCode = sku.sku_final_code || sku.sku_code || '—';
+  const ps = parseInt(sku.pack_size || 1, 10);
   $('conv-nombre').textContent = sku.name||'—';
-  $('conv-meta').textContent   = `SKU: ${skuCode} · EAN: ${sku.ean13||'—'} · Base: ${ub}`;
+  // §20: mostrar unidad + pack_size si aplica
+  const ubLabel = (ub === 'ud' && ps > 1)
+    ? `ud (${ps >= 1000 ? (ps/1000).toFixed(0)+' kg' : ps+' g'} / unidad)`
+    : ub;
+  $('conv-meta').textContent   = `SKU: ${skuCode} · ${esc(ubLabel)} · EAN: ${sku.ean13||'—'}`;
   $('hid-sku-id').value   = sku.id||'';
   $('hid-sku-ean').value  = sku.ean13||'';
   $('hid-sku-ub').value   = ub;
   $('hid-sku-name').value = sku.name||'';
+  if ($('hid-sku-ps')) $('hid-sku-ps').value = String(ps);
   const sel=$('sel-uc');
   sel.innerHTML=(UC_OPTS[ub]||UC_OPTS.ud).map(o=>`<option value="${o.v}">${o.l}</option>`).join('');
   sel.value=ub;
@@ -1176,8 +1244,29 @@ function abrirConv(sku) {
 }
 
 function actualizarConv() {
-  const base=convertir($('inp-qty').value,$('hid-sku-ub').value,$('sel-uc').value);
-  $('conv-res').textContent=(parseFloat($('inp-qty').value)>0)?base.toLocaleString('es-ES'):'—';
+  const val = $('inp-qty').value;
+  const ub  = $('hid-sku-ub').value;
+  const uc  = $('sel-uc').value;
+  const ps  = parseInt($('hid-sku-ps')?.value || '1', 10); // pack_size del SKU
+  const qty = parseFloat(val);
+
+  if (!qty || qty <= 0) {
+    $('conv-res').textContent    = '—';
+    $('conv-res-ub').textContent = ub;
+    return;
+  }
+
+  const base = convertir(val, ub, uc);
+
+  // Mostrar cantidad y, si hay pack_size, el peso total informativo
+  if (ub === 'ud' && ps > 1) {
+    const totalG = base * ps;
+    $('conv-res').textContent = base.toLocaleString('es-ES');
+    $('conv-res-ub').textContent = `ud (${totalG >= 1000 ? (totalG/1000).toFixed(2) + ' kg' : totalG + ' g'})`;
+  } else {
+    $('conv-res').textContent = formatQuantity(base, { unit_of_measure: ub, pack_size: ps });
+    $('conv-res-ub').textContent = '';
+  }
 }
 
 function añadirItem() {
@@ -1188,12 +1277,19 @@ function añadirItem() {
   if (!vence)                    {toast('Fecha de vencimiento obligatoria.','warn');return;}
   if (new Date(vence)<=new Date()){toast('Fecha de vencimiento inválida.','warn');return;}
 
+  const ps2 = parseInt($('hid-sku-ps')?.value || '1', 10);
+  const quantityFinal = convertir(qty, ub, uc);
   S.items.push({
     skuId:         parseInt($('hid-sku-id').value,10),
     ean:           $('hid-sku-ean').value,
     nombre:        $('hid-sku-name').value,
-    unidadBase:    ub, quantity: convertir(qty,ub,uc),
-    batchRef:      lote, expDate: vence, labelComercial:`${qty} ${uc}`,
+    unidadBase:    ub,
+    packSize:      ps2,
+    quantity:      quantityFinal,
+    batchRef:      lote,
+    expDate:       vence,
+    // §20: labelComercial muestra cantidad legible con peso total si pack_size > 1
+    labelComercial: formatQuantity(quantityFinal, { unit_of_measure: ub, pack_size: ps2 }),
   });
   renderItemsTable(); cerrarConv();
   toast(`"${$('hid-sku-name').value}" añadido.`,'ok');
@@ -1209,7 +1305,7 @@ function renderItemsTable() {
   tbody.innerHTML='';
   S.items.forEach((it,idx)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td><p class="font-medium text-ink-900">${esc(it.nombre)}</p><p class="text-xs text-ink-400 font-mono mt-0.5">${esc(it.labelComercial)}</p></td><td class="text-right font-mono font-semibold text-ink-900">${it.quantity.toLocaleString('es-ES')} ${esc(it.unidadBase)}</td><td class="font-mono text-xs text-ink-600">${esc(it.batchRef)}</td><td class="text-ink-600">${fmtDate(it.expDate)}</td><td><button class="del-item text-ink-400 hover:text-danger transition-colors p-1" data-idx="${idx}"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button></td>`;
+    tr.innerHTML=`<td><p class="font-medium text-ink-900">${esc(it.nombre)}</p><p class="text-xs text-ink-400 font-mono mt-0.5">${esc(it.labelComercial)}</p></td><td class="text-right font-mono font-semibold text-ink-900">${formatQuantity(it.quantity, {unit_of_measure:it.unidadBase, pack_size:it.packSize||1})}</td><td class="font-mono text-xs text-ink-600">${esc(it.batchRef)}</td><td class="text-ink-600">${fmtDate(it.expDate)}</td><td><button class="del-item text-ink-400 hover:text-danger transition-colors p-1" data-idx="${idx}"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button></td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('.del-item').forEach(b=>b.addEventListener('click',()=>{
@@ -1228,7 +1324,7 @@ function rellenarResumen() {
   const tbody=$('summary-tbody'); tbody.innerHTML='';
   S.items.forEach(it=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td><p class="font-medium text-ink-900">${esc(it.nombre)}</p><p class="text-xs text-ink-400 font-mono">${esc(it.labelComercial)} → ${it.quantity.toLocaleString('es-ES')} ${esc(it.unidadBase)}</p></td><td class="text-right font-mono font-semibold">${it.quantity.toLocaleString('es-ES')} ${esc(it.unidadBase)}</td><td class="text-ink-600">${fmtDate(it.expDate)}</td>`;
+    tr.innerHTML=`<td><p class="font-medium text-ink-900">${esc(it.nombre)}</p><p class="text-xs text-ink-400 font-mono">${esc(it.labelComercial)} → ${it.quantity.toLocaleString('es-ES')} ${esc(it.unidadBase)}</p></td><td class="text-right font-mono font-semibold">${formatQuantity(it.quantity, {unit_of_measure:it.unidadBase, pack_size:it.packSize||1})}</td><td class="text-ink-600">${fmtDate(it.expDate)}</td>`;
     tbody.appendChild(tr);
   });
   if (S.docB64) {

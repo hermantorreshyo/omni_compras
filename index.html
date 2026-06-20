@@ -465,6 +465,7 @@
           <input id="hid-sku-ean"  type="hidden" />
           <input id="hid-sku-ub"   type="hidden" />
           <input id="hid-sku-name" type="hidden" />
+          <input id="hid-sku-ps"   type="hidden" value="1" /> <!-- pack_size §20 -->
 
           <div class="grid grid-cols-2 gap-4">
             <div>
@@ -902,6 +903,13 @@
   </div>
 </div>
 
-<script src="app.js"></script>
+<script>
+  // Cache-busting: añade timestamp para forzar recarga en cada deploy
+  // En producción, reemplazar por el número de versión del release (ej: ?v=2.0.0)
+  const appVersion = '20260621';  // ← actualizar en cada deploy
+  const s = document.createElement('script');
+  s.src = 'app.js?v=' + appVersion;
+  document.head.appendChild(s);
+</script>
 </body>
 </html>
