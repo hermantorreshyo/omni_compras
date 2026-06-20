@@ -1144,6 +1144,7 @@ function renderDD(q) {
       </svg>
       Buscando en catálogo OMNI…
     </div>`;
+    _posicionarDD();
     dd.classList.remove('hidden');
   }
 
@@ -1198,6 +1199,7 @@ function _renderDDItems(items) {
         </p>
       </div>
     </div>`).join('');
+  _posicionarDD();
   dd.classList.remove('hidden');
   dd.querySelectorAll('.dd-row').forEach(el => {
     el.addEventListener('click', () => {
@@ -1208,7 +1210,18 @@ function _renderDDItems(items) {
   });
 }
 
-const cerrarDD   = () => $('ean-dropdown').classList.add('hidden');
+const cerrarDD = () => $('ean-dropdown').classList.add('hidden');
+
+/** Posiciona el dropdown fixed exactamente bajo el input EAN */
+function _posicionarDD() {
+  const inp  = $('input-ean');
+  const dd   = $('ean-dropdown');
+  if (!inp || !dd) return;
+  const rect = inp.getBoundingClientRect();
+  dd.style.top    = (rect.bottom + 4) + 'px';
+  dd.style.left   = rect.left + 'px';
+  dd.style.width  = rect.width + 'px';
+}
 const cerrarConv = () => { $('conv-panel').classList.add('hidden'); $('input-ean').value=''; $('input-ean').focus(); };
 
 function abrirConv(sku) {
@@ -1266,51 +1279,30 @@ function abrirConv(sku) {
   if (eanInp) { delete eanInp.dataset.ocrLote; delete eanInp.dataset.ocrVence; delete eanInp.dataset.ocrCant; }
 
   // Ocultar resultado hasta que el usuario escriba
-  $('conv-result-box')?.classList.add('hidden');
-  $('conv-res').textContent    = '—';
-  $('conv-res-ub').textContent = '';
   $('conv-peso-total')?.classList.add('hidden');
-
   $('conv-panel').classList.remove('hidden');
   setTimeout(() => $('inp-qty').focus(), 80);
 }
 
 function actualizarConv() {
-  const val  = $('inp-qty').value;
-  const ub   = $('hid-sku-ub').value  || 'ud';
-  const uc   = $('sel-uc').value       || ub;
-  const ps   = parseInt($('hid-sku-ps')?.value || '1', 10);
-  const qty  = parseFloat(val);
+  const val = $('inp-qty').value;
+  const ub  = $('hid-sku-ub').value || 'ud';
+  const ps  = parseInt($('hid-sku-ps')?.value || '1', 10);
+  const qty = parseFloat(val);
+  const pesoEl = $('conv-peso-total');
 
-  const box     = $('conv-result-box');
-  const resEl   = $('conv-res');
-  const pesoEl  = $('conv-peso-total');
+  if (!pesoEl) return;
 
-  if (!qty || qty <= 0) {
-    box?.classList.add('hidden');
-    return;
+  // Solo mostrar el peso total cuando es ud con pack_size > 1 (§20 BRAUNGEL FRIO)
+  if (qty > 0 && ub === 'ud' && ps > 1) {
+    const totalG = Math.round(qty) * ps;
+    const kgStr  = totalG >= 1000 ? (totalG/1000).toFixed(2) + ' kg' : totalG + ' g';
+    const psStr  = ps >= 1000 ? (ps/1000) + ' kg' : ps + ' g';
+    pesoEl.textContent = `Total: ${kgStr} (${Math.round(qty)} × ${psStr})`;
+    pesoEl.classList.remove('hidden');
+  } else {
+    pesoEl.classList.add('hidden');
   }
-
-  // La cantidad enviada al API = qty para 'ud', o convertida para g/ml
-  const quantityForApi = (ub === 'ud') ? Math.round(qty) : convertir(val, ub, uc);
-  const displayStr     = formatQuantity(quantityForApi, { unit_of_measure: ub, pack_size: ps });
-
-  if (resEl) resEl.textContent = displayStr;
-  $('conv-res-ub').textContent = '';
-
-  // Para ud con pack_size > 1: mostrar el peso total informativo §20
-  if (pesoEl) {
-    if (ub === 'ud' && ps > 1) {
-      const totalG = quantityForApi * ps;
-      const kgStr  = totalG >= 1000 ? (totalG/1000).toFixed(2) + ' kg' : totalG + ' g';
-      pesoEl.textContent = `Peso total: ${kgStr} (${quantityForApi} × ${ps >= 1000 ? (ps/1000)+'kg' : ps+'g'})`;
-      pesoEl.classList.remove('hidden');
-    } else {
-      pesoEl.classList.add('hidden');
-    }
-  }
-
-  box?.classList.remove('hidden');
 }
 
 function añadirItem() {

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>JOSEPAN 360 · Albaranes de Compras [1002]</title>
 
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=20260622" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
@@ -397,7 +397,7 @@
       </div>
 
       <!-- Escáner EAN -->
-      <div class="bg-white rounded-2xl border border-ink-200 overflow-hidden">
+      <div class="bg-white rounded-2xl border border-ink-200">
         <div class="px-6 py-5 border-b border-ink-100 flex items-center justify-between gap-3">
           <div>
             <h2 class="text-base font-semibold text-ink-900">Escanear producto</h2>
@@ -421,90 +421,79 @@
                   d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z"/>
               </svg>
             </button>
-            <!-- Dropdown búsqueda predictiva -->
+            <!-- Dropdown búsqueda predictiva — fixed para escapar de cualquier overflow -->
             <div id="ean-dropdown"
-              class="hidden absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-ink-200
-                     rounded-xl overflow-hidden max-h-56 overflow-y-auto">
+              class="hidden fixed z-50 bg-white border border-ink-200
+                     rounded-xl max-h-56 overflow-y-auto">
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Panel de conversión (aparece al seleccionar producto) -->
-      <div id="conv-panel" class="hidden bg-white rounded-2xl border border-brand/30 overflow-hidden">
-        <div class="px-6 py-4 bg-brand/5 border-b border-brand/20 flex items-start justify-between gap-3">
-          <div>
-            <p class="text-xs font-semibold text-brand uppercase tracking-wide mb-0.5">Producto reconocido</p>
-            <p id="conv-nombre" class="text-base font-semibold text-ink-900">—</p>
-            <p id="conv-meta" class="text-xs text-ink-500 mt-0.5 font-mono">—</p>
+      <!-- Panel de registro (aparece al reconocer un SKU existente) -->
+      <div id="conv-panel" class="hidden bg-white rounded-2xl border border-brand/30">
+        <!-- Header: datos del SKU -->
+        <div class="px-5 py-3.5 bg-brand/5 border-b border-brand/20 flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-[10px] font-bold text-brand uppercase tracking-widest mb-0.5">✓ Producto reconocido</p>
+            <p id="conv-nombre" class="text-sm font-bold text-ink-900 leading-snug">—</p>
+            <p id="conv-meta" class="text-[11px] text-ink-400 mt-0.5 font-mono">—</p>
           </div>
-          <button id="btn-conv-cancel" class="text-ink-400 hover:text-ink-700 transition-colors mt-0.5">
-            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <button id="btn-conv-cancel" class="flex-shrink-0 text-ink-300 hover:text-danger transition-colors p-0.5">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
             </svg>
           </button>
         </div>
-        <div class="p-6 space-y-4">
+
+        <!-- Campos: cantidad · lote · vencimiento -->
+        <div class="px-5 py-4">
+          <!-- Campos ocultos de contexto -->
           <input id="hid-sku-id"   type="hidden" />
           <input id="hid-sku-ean"  type="hidden" />
           <input id="hid-sku-ub"   type="hidden" />
           <input id="hid-sku-name" type="hidden" />
           <input id="hid-sku-ps"   type="hidden" value="1" />
-          <!-- sel-uc se mantiene oculto para compatibilidad con convertir() -->
-          <select id="sel-uc" class="hidden"></select>
+          <select id="sel-uc" class="hidden" aria-hidden="true"></select>
 
-          <!-- §20: Cantidad en unidades físicas del SKU -->
-          <div>
-            <label class="block text-sm font-medium text-ink-700 mb-1.5" for="inp-qty">
-              Cantidad <span id="conv-qty-label" class="text-ink-400 font-normal text-xs ml-1"></span>
-              <span class="text-danger">*</span>
-            </label>
-            <div class="flex items-center gap-3">
-              <input id="inp-qty" type="number" inputmode="decimal" min="1" step="1" placeholder="0"
-                class="w-40 px-3.5 py-2.5 rounded-lg border border-ink-300 text-lg font-mono
-                       font-bold text-ink-900 text-center focus:border-brand" />
-              <div id="conv-qty-hint" class="text-xs text-ink-400 leading-snug"></div>
-            </div>
-          </div>
-
-          <!-- Resultado: lo que entrará al inventario §20 -->
-          <div id="conv-result-box"
-            class="flex items-center justify-between bg-brand/5 border border-brand/20 rounded-xl px-4 py-3 hidden">
+          <div class="grid grid-cols-3 gap-3">
+            <!-- Cantidad -->
             <div>
-              <p class="text-xs font-medium text-ink-500 uppercase tracking-wide mb-0.5">
-                Entrará al inventario
-              </p>
-              <p class="text-xl font-bold text-brand">
-                <span id="conv-res">—</span>
-                <span id="conv-res-ub" class="text-sm font-medium text-brand/50 ml-1"></span>
-              </p>
-              <p id="conv-peso-total" class="text-xs text-ink-400 mt-0.5 hidden"></p>
+              <label class="block text-[10px] font-bold text-ink-500 uppercase tracking-wide mb-1.5" for="inp-qty">
+                Cantidad<span id="conv-qty-label" class="ml-1 font-normal text-brand normal-case"></span>
+                <span class="text-danger"> *</span>
+              </label>
+              <input id="inp-qty" type="number" inputmode="numeric" min="1" step="1" placeholder="0"
+                class="w-full px-2 py-2 rounded-lg border-2 border-ink-200 text-2xl font-mono font-black
+                       text-ink-900 text-center focus:border-brand focus:outline-none transition-colors" />
+              <p id="conv-peso-total" class="hidden text-[10px] text-center text-ink-400 mt-1 font-mono leading-tight"></p>
             </div>
-          </div>
 
-          <!-- Lote + vencimiento -->
-          <div class="grid grid-cols-2 gap-4">
+            <!-- Lote -->
             <div>
-              <label class="block text-sm font-medium text-ink-700 mb-1.5" for="inp-lote">
+              <label class="block text-[10px] font-bold text-ink-500 uppercase tracking-wide mb-1.5" for="inp-lote">
                 Código de lote <span class="text-danger">*</span>
               </label>
-              <input id="inp-lote" type="text" placeholder="LOT-YYYYMMDD-XXXX"
+              <input id="inp-lote" type="text" placeholder="Ej: 06926"
                 autocomplete="off" spellcheck="false"
-                class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm font-mono
-                       focus:border-brand" />
+                class="w-full px-3 py-2 rounded-lg border border-ink-300 text-sm font-mono
+                       text-ink-900 focus:border-brand focus:outline-none transition-colors" />
             </div>
+
+            <!-- Vencimiento -->
             <div>
-              <label class="block text-sm font-medium text-ink-700 mb-1.5" for="inp-vence">
-                Fecha vencimiento <span class="text-danger">*</span>
+              <label class="block text-[10px] font-bold text-ink-500 uppercase tracking-wide mb-1.5" for="inp-vence">
+                Vencimiento <span class="text-danger">*</span>
               </label>
               <input id="inp-vence" type="date"
-                class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm focus:border-brand" />
+                class="w-full px-3 py-2 rounded-lg border border-ink-300 text-sm
+                       text-ink-900 focus:border-brand focus:outline-none transition-colors" />
             </div>
           </div>
 
           <button id="btn-add-item"
-            class="w-full bg-ok hover:bg-emerald-600 text-white font-semibold text-sm
-                   py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+            class="mt-4 w-full bg-ok hover:bg-emerald-600 text-white font-bold text-sm
+                   py-2.5 px-4 rounded-xl transition-colors flex items-center justify-center gap-2">
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
             </svg>
@@ -886,7 +875,7 @@
 <script>
   // Cache-busting: añade timestamp para forzar recarga en cada deploy
   // En producción, reemplazar por el número de versión del release (ej: ?v=2.0.0)
-  const appVersion = '20260621';  // ← actualizar en cada deploy
+  const appVersion = '20260622';  // ← actualizar en cada deploy
   const s = document.createElement('script');
   s.src = 'app.js?v=' + appVersion;
   document.head.appendChild(s);
