@@ -321,20 +321,26 @@ async function initLoginView() {
   });
 }
 
-async function _cargarSedesLogin() {
+function _cargarSedesLogin() {
   const sel = $('sel-sede');
-  sel.innerHTML = '<option value="">— Cargando sedes… —</option>';
-  try {
-    const raw  = await Api.interlocutorsPublic();
-    const items = raw.data?.items ?? [];
-    sel.innerHTML = '<option value="">— Seleccionar sede —</option>';
-    items.forEach(i => {
-      const o = document.createElement('option');
-      o.value = i.id; o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
-      sel.appendChild(o);
-    });
-    if (!items.length) _fallbackSedes(sel);
-  } catch(_) { _fallbackSedes(sel); }
+  // Cargar sedes estáticas INMEDIATAMENTE — siempre disponibles
+  _fallbackSedes(sel);
+
+  // Intentar actualizar desde el API en segundo plano (sin bloquear)
+  fetch('api/omni.php?action=interlocutors&all=1&public=1')
+    .then(r => r.json())
+    .then(raw => {
+      const items = raw.data?.items ?? [];
+      if (!items.length) return; // mantener las estáticas
+      sel.innerHTML = '<option value="">— Seleccionar sede —</option>';
+      items.forEach(i => {
+        const o = document.createElement('option');
+        o.value = i.id;
+        o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
+        sel.appendChild(o);
+      });
+    })
+    .catch(() => {}); // silencioso — ya están las estáticas
 }
 
 function _fallbackSedes(sel) {
