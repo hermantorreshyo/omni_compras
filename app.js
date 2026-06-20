@@ -1490,6 +1490,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initSedeView();
   initStep1(); initStep2(); initStep3(); initStep4();
 
+  initLoginView(); // siempre registrar listeners del login
+
   if (Api._token) {  // iid puede ser 0 si el API devuelve interlocutor_id: null
     S.interlocutorId=Api._iid; S.sedePrincipalId=Api._iid;
     try {
@@ -1503,7 +1505,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   } else {
     showView('view-login');
-    initLoginView();
     return;
   }
   // (initLoginView se llama solo en el else — no duplicar)
