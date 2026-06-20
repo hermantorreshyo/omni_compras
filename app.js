@@ -257,10 +257,9 @@ async function initLoginView() {
     const i = $('inp-password'); i.type = i.type === 'password' ? 'text' : 'password';
   });
   $('inp-username').addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();$('inp-password').focus();} });
-  $('inp-password').addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();$('btn-login').click();} });
+  $('inp-password').addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault(); $('btn-login').click();} });
 
-  $('form-login').addEventListener('submit', async e => {
-    e.preventDefault();
+  $('btn-login').addEventListener('click', async e => {
     const username = $('inp-username').value.trim();
     const password = $('inp-password').value;
     const errEl    = $('login-error'), btn = $('btn-login');
@@ -1507,5 +1506,5 @@ document.addEventListener('DOMContentLoaded', () => {
     initLoginView();
     return;
   }
-  initLoginView();
+  // (initLoginView se llama solo en el else — no duplicar)
 });

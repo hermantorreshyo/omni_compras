@@ -66,7 +66,7 @@
     <div class="bg-white rounded-2xl shadow-sm border border-ink-200 p-8">
       <h2 class="text-lg font-semibold text-ink-900 mb-6">Iniciar sesión</h2>
 
-      <form id="form-login" class="space-y-4" novalidate>
+      <div id="form-login" class="space-y-4">
         <div>
           <label class="block text-sm font-medium text-ink-700 mb-1.5" for="inp-username">Usuario</label>
           <input id="inp-username" type="text" name="username" autocomplete="username"
@@ -97,7 +97,7 @@
 
         <p id="login-error" class="hidden text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></p>
 
-        <button type="submit" id="btn-login"
+        <button type="button" id="btn-login"
           class="w-full bg-brand hover:bg-brand-light text-white font-semibold py-2.5 px-4 rounded-lg
                  transition-colors text-sm flex items-center justify-center gap-2 mt-2">
           <span id="btn-login-label">Entrar</span>
@@ -106,7 +106,7 @@
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
           </svg>
         </button>
-      </form>
+      </div>
     </div>
   </div>
 </div>
@@ -936,7 +936,7 @@
 <script>
   // Cache-busting: añade timestamp para forzar recarga en cada deploy
   // En producción, reemplazar por el número de versión del release (ej: ?v=2.0.0)
-  const appVersion = '20260626';  // v20 — fallback sedes garantizado  // ← actualizar en cada deploy
+  const appVersion = '20260627';  // v20 — fallback sedes garantizado  // ← actualizar en cada deploy
   const s = document.createElement('script');
   s.src = 'app.js?v=' + appVersion;
   document.head.appendChild(s);
