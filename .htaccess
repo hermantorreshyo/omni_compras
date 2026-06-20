@@ -1,12 +1,15 @@
-# JOSEPAN 360 · [1002] Albaranes v6
+# JOSEPAN 360 · [1002] Albaranes — Apache producción
 Options -Indexes
 AddType application/javascript .js
 AddType application/json .json
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    # ⚠ Ajusta a tu ruta real (lo que va después de localhost/)
-    RewriteBase /josepan/360/omni/dev/1002_04/
+    RewriteBase /
+
+    # Pasar el header Authorization a PHP (Apache lo bloquea por defecto)
+    RewriteCond %{HTTP:Authorization} .
+    RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
     # Servir archivos reales directamente
     RewriteCond %{REQUEST_FILENAME} -f [OR]
