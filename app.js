@@ -476,131 +476,184 @@ function _procesarLineasOcr(lineas) {
   if (!panel) { $('input-ean')?.focus(); return; }
 
   panel.classList.remove('hidden');
-  const tbody = $('ocr-lineas-body');
-  tbody.innerHTML = '';
+  const container = $('ocr-lineas-body');
+  container.innerHTML = '';
+
+  let totalMatch = 0, totalNoMatch = 0;
+  const matchedItems = []; // para "añadir todos"
 
   lineas.forEach((linea, idx) => {
-    const sku    = matchSkuFromOcr(linea);
-    const tr     = document.createElement('tr');
-    const cantRaw = linea.cantidad_recibida || '';
-    const qty    = sku ? parseOcrQuantity(cantRaw, sku.unit_of_measure) : null;
+    const sku     = matchSkuFromOcr(linea);
+    const cantRaw = (linea.cantidad_recibida || '').trim();
+    const qty     = sku ? parseOcrQuantity(cantRaw, sku.unit_of_measure) : null;
+    const lote    = linea.lote            || '';
+    const vence   = linea.fecha_caducidad || '';
+    const desc    = linea.descripcion     || '—';
+    const codigo  = linea.articulo_proveedor || '';
+
+    if (sku) totalMatch++; else totalNoMatch++;
+
+    const card = document.createElement('div');
+    card.className = 'ocr-line-card px-5 py-3.5 flex items-start gap-4' + (sku ? '' : ' bg-amber-50/40');
+    card.dataset.idx = idx;
 
     if (sku) {
-      // ─ Match encontrado: fila verde con datos pre-cargados ─
-      tr.innerHTML = `
-        <td class="py-2 px-3">
-          <p class="text-xs font-medium text-ink-900 truncate max-w-[160px]">${esc(sku.name)}</p>
-          <p class="text-[10px] text-ink-400 font-mono">${esc(sku.sku_final_code || sku.sku_ref || '')}</p>
-          <p class="text-[10px] text-brand">OCR: ${esc(linea.descripcion || '')}</p>
-        </td>
-        <td class="py-2 px-3 text-center">
-          <span class="inline-flex items-center gap-1 text-[10px] font-medium bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
-            <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
-            Match
-          </span>
-        </td>
-        <td class="py-2 px-3">
-          <div class="flex items-center gap-1">
-            <input type="number" class="ocr-qty w-20 px-2 py-1 text-xs border border-ink-300 rounded font-mono text-center focus:border-brand"
-              value="${qty || ''}" min="0" data-ub="${esc(sku.unit_of_measure||'ud')}" placeholder="cant." />
-            <span class="text-[10px] text-ink-500">${esc(sku.unit_of_measure||'ud')}</span>
+      // ── CARD CON MATCH ─────────────────────────────────
+      if (qty && lote && vence) matchedItems.push({ sku, qty, lote, vence, cantRaw });
+
+      card.innerHTML = `
+        <div class="flex-shrink-0 w-6 h-6 rounded-full bg-green-100 flex items-center justify-center mt-0.5">
+          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="#16a34a" stroke-width="3">
+            <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-ink-900 truncate">${esc(sku.name)}</p>
+              <p class="text-[11px] text-ink-400 font-mono">
+                ${esc(sku.sku_final_code || sku.sku_ref || '')} · ${esc(sku.unit_of_measure||'ud')}
+                <span class="text-brand ml-1">← OCR: ${esc(desc)} ${codigo ? '('+esc(codigo)+')' : ''}</span>
+              </p>
+            </div>
+            <button class="ocr-add-btn flex-shrink-0 text-[11px] font-semibold bg-ok hover:bg-emerald-600
+              text-white px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+              data-skuid="${esc(String(sku.id))}" data-skunom="${esc(sku.name)}" data-ub="${esc(sku.unit_of_measure||'ud')}">
+              + Añadir
+            </button>
           </div>
-          <p class="text-[10px] text-ink-400 mt-0.5">OCR: ${esc(cantRaw)}</p>
-        </td>
-        <td class="py-2 px-3">
-          <input type="text" class="ocr-lote w-32 px-2 py-1 text-[11px] border border-ink-300 rounded font-mono focus:border-brand"
-            value="${esc(linea.lote || '')}" placeholder="Lote" />
-        </td>
-        <td class="py-2 px-3">
-          <input type="date" class="ocr-vence w-32 px-2 py-1 text-[11px] border border-ink-300 rounded focus:border-brand"
-            value="${esc(linea.fecha_caducidad || '')}" />
-        </td>
-        <td class="py-2 px-3 text-center">
-          <button class="ocr-add-btn bg-ok hover:bg-emerald-600 text-white text-[11px] font-medium px-3 py-1.5 rounded transition-colors"
-            data-idx="${idx}" data-skuid="${esc(String(sku.id))}" data-skunom="${esc(sku.name)}" data-ub="${esc(sku.unit_of_measure||'ud')}">
-            + Añadir
-          </button>
-        </td>`;
+          <div class="mt-2 grid grid-cols-3 gap-2">
+            <div>
+              <label class="block text-[10px] font-medium text-ink-400 uppercase tracking-wide mb-1">
+                Cantidad (${esc(sku.unit_of_measure||'ud')}) *
+              </label>
+              <input type="number" class="ocr-qty w-full px-2 py-1.5 text-sm border border-ink-300
+                rounded-lg font-mono text-center focus:border-brand focus:outline-none"
+                value="${qty || ''}" min="1" placeholder="0" />
+              <p class="text-[10px] text-ink-400 mt-0.5">OCR: ${esc(cantRaw)}</p>
+            </div>
+            <div>
+              <label class="block text-[10px] font-medium text-ink-400 uppercase tracking-wide mb-1">Lote *</label>
+              <input type="text" class="ocr-lote w-full px-2 py-1.5 text-xs border border-ink-300
+                rounded-lg font-mono focus:border-brand focus:outline-none"
+                value="${esc(lote)}" placeholder="Código de lote" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-medium text-ink-400 uppercase tracking-wide mb-1">Vencimiento *</label>
+              <input type="date" class="ocr-vence w-full px-2 py-1.5 text-xs border border-ink-300
+                rounded-lg focus:border-brand focus:outline-none"
+                value="${esc(vence)}" />
+            </div>
+          </div>
+        </div>`;
     } else {
-      // ─ Sin match: fila ámbar con opción buscar/crear ─
-      tr.innerHTML = `
-        <td class="py-2 px-3" colspan="2">
-          <p class="text-xs font-medium text-ink-900 truncate max-w-[220px]">${esc(linea.descripcion || '—')}</p>
-          <p class="text-[10px] text-ink-400 font-mono">Artículo proveedor: ${esc(linea.articulo_proveedor || '—')}</p>
-        </td>
-        <td class="py-2 px-3 text-center">
-          <span class="inline-flex text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
-            Sin match
-          </span>
-        </td>
-        <td class="py-2 px-3" colspan="2">
-          <p class="text-[10px] text-ink-500">Cant. OCR: ${esc(cantRaw)} · Lote: ${esc(linea.lote||'—')}</p>
-        </td>
-        <td class="py-2 px-3 text-center">
-          <div class="flex flex-col gap-1 items-center">
-            <button class="ocr-buscar-btn text-[11px] text-brand underline whitespace-nowrap"
-              data-desc="${esc(linea.descripcion||'')}" data-cant="${esc(cantRaw)}" data-lote="${esc(linea.lote||'')}" data-vence="${esc(linea.fecha_caducidad||'')}">
-              Buscar
-            </button>
-            <button class="ocr-crear-btn text-[11px] text-ink-500 underline whitespace-nowrap"
-              data-desc="${esc(linea.descripcion||'')}" data-ref="${esc(linea.articulo_proveedor||'')}">
-              Crear SKU
-            </button>
+      // ── CARD SIN MATCH ──────────────────────────────────
+      card.innerHTML = `
+        <div class="flex-shrink-0 w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center mt-0.5">
+          <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="#d97706" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126Z"/>
+          </svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-ink-700 truncate">${esc(desc)}</p>
+              <p class="text-[11px] text-ink-400 font-mono">
+                ${codigo ? 'Ref. proveedor: ' + esc(codigo) + ' · ' : ''}OCR cant: ${esc(cantRaw)}
+                ${lote ? '· Lote: ' + esc(lote) : ''}
+              </p>
+              <p class="text-[11px] text-amber-700 mt-0.5">
+                ⚠ No encontrado en el catálogo OMNI
+              </p>
+            </div>
+            <div class="flex flex-col gap-1.5 flex-shrink-0">
+              <button class="ocr-buscar-btn text-[11px] font-medium bg-brand/10 hover:bg-brand/20
+                text-brand px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                data-desc="${esc(desc)}" data-cant="${esc(cantRaw)}"
+                data-lote="${esc(lote)}" data-vence="${esc(vence)}">
+                🔍 Buscar en catálogo
+              </button>
+              <button class="ocr-crear-btn text-[11px] font-medium bg-ink-100 hover:bg-ink-200
+                text-ink-700 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+                data-desc="${esc(desc)}" data-ref="${esc(codigo)}">
+                ✚ Crear SKU nuevo
+              </button>
+            </div>
           </div>
-        </td>`;
+        </div>`;
     }
 
-    tbody.appendChild(tr);
+    container.appendChild(card);
   });
 
-  // Listeners de los botones generados
-  tbody.querySelectorAll('.ocr-add-btn').forEach(btn => {
+  // Actualizar contadores
+  $('ocr-stat-match').querySelector('.ocr-num').textContent  = totalMatch;
+  $('ocr-stat-nomatch').querySelector('.ocr-num').textContent = totalNoMatch;
+  $('ocr-stat-added').querySelector('.ocr-num').textContent  = '0';
+
+  // Botón añadir todos
+  const btnAll = $('btn-ocr-add-all');
+  if (btnAll) {
+    btnAll.disabled = matchedItems.length === 0;
+    btnAll.textContent = `Añadir todos con match (${matchedItems.length})`;
+    btnAll.onclick = () => _añadirTodosOcr();
+  }
+
+  _bindOcrCardListeners();
+}
+
+function _bindOcrCardListeners() {
+  const container = $('ocr-lineas-body');
+
+  container.querySelectorAll('.ocr-add-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const row   = btn.closest('tr');
-      const qtyEl = row.querySelector('.ocr-qty');
-      const loteEl = row.querySelector('.ocr-lote');
-      const venceEl = row.querySelector('.ocr-vence');
-      const qty   = parseInt(qtyEl?.value || '0', 10);
-      const lote  = loteEl?.value.trim() || genLote();
-      const vence = venceEl?.value;
-      const ub    = btn.dataset.ub || 'ud';
+      const card  = btn.closest('.ocr-line-card');
+      const qty   = parseInt(card.querySelector('.ocr-qty')?.value  || '0', 10);
+      const lote  = card.querySelector('.ocr-lote')?.value.trim()  || '';
+      const vence = card.querySelector('.ocr-vence')?.value         || '';
+      const ub    = btn.dataset.ub   || 'ud';
       const skuId = parseInt(btn.dataset.skuid, 10);
       const nom   = btn.dataset.skunom;
 
-      if (!qty || qty <= 0)         { toast('La cantidad debe ser mayor que cero.', 'warn'); return; }
-      if (!lote)                     { toast('El código de lote es obligatorio.', 'warn'); return; }
-      if (!vence)                    { toast('La fecha de vencimiento es obligatoria.', 'warn'); return; }
-      if (new Date(vence) <= new Date()) { toast('Fecha de vencimiento inválida.', 'warn'); return; }
+      if (!qty || qty <= 0)            { toast('La cantidad debe ser mayor que cero.', 'warn'); return; }
+      if (!lote)                        { toast('El código de lote es obligatorio.', 'warn'); return; }
+      if (!vence)                       { toast('La fecha de vencimiento es obligatoria.', 'warn'); return; }
+      if (new Date(vence) <= new Date()){ toast('Fecha de vencimiento inválida.', 'warn'); return; }
 
-      S.items.push({
-        skuId, ean: '', nombre: nom, unidadBase: ub,
-        quantity: qty, batchRef: lote, expDate: vence,
-        labelComercial: `${qty} ${ub} (OCR)`,
-      });
+      S.items.push({ skuId, ean:'', nombre:nom, unidadBase:ub, quantity:qty,
+        batchRef:lote, expDate:vence, labelComercial:`${qty} ${ub}` });
       renderItemsTable();
-      btn.closest('tr').remove();
-      // Si no quedan filas sin añadir, ocultar panel
-      if (!tbody.querySelector('tr')) panel.classList.add('hidden');
-      toast(`"${nom}" añadido desde albarán.`, 'ok');
+
+      // Marcar card como añadida
+      card.style.opacity = '0.45';
+      btn.textContent = '✓ Añadido';
+      btn.disabled = true;
+      btn.classList.replace('bg-ok','bg-green-200');
+
+      // Actualizar contador
+      const num = $('ocr-stat-added').querySelector('.ocr-num');
+      num.textContent = parseInt(num.textContent) + 1;
+
+      // Habilitar siguiente paso
+      $('btn-step3-next').disabled = false;
+      toast(`"${nom}" añadido.`, 'ok');
     });
   });
 
-  tbody.querySelectorAll('.ocr-buscar-btn').forEach(btn => {
+  container.querySelectorAll('.ocr-buscar-btn').forEach(btn => {
     btn.addEventListener('click', () => {
-      const desc = btn.dataset.desc;
-      $('input-ean').value = desc;
-      $('input-ean').focus();
-      // Activar dropdown con los primeros resultados
-      const q = desc.split(' ').slice(0,3).join(' ');
-      renderDD(q);
-      // Guardar contexto para pre-rellenar lote/vence al seleccionar
+      const desc = btn.dataset.desc || '';
+      // Buscar en el catálogo y mostrar dropdown
+      $('input-ean').value = desc.split(' ').slice(0,4).join(' ');
       $('input-ean').dataset.ocrLote  = btn.dataset.lote;
       $('input-ean').dataset.ocrVence = btn.dataset.vence;
       $('input-ean').dataset.ocrCant  = btn.dataset.cant;
+      $('input-ean').focus();
+      renderDD($('input-ean').value);
     });
   });
 
-  tbody.querySelectorAll('.ocr-crear-btn').forEach(btn => {
+  container.querySelectorAll('.ocr-crear-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       $('inp-sku-nombre').value = btn.dataset.desc || '';
       $('inp-sku-ref').value    = btn.dataset.ref  || '';
@@ -609,6 +662,37 @@ function _procesarLineasOcr(lineas) {
     });
   });
 }
+
+function _añadirTodosOcr() {
+  const cards = $('ocr-lineas-body').querySelectorAll('.ocr-add-btn:not([disabled])');
+  let added = 0;
+  cards.forEach(btn => {
+    const card  = btn.closest('.ocr-line-card');
+    const qty   = parseInt(card.querySelector('.ocr-qty')?.value  || '0', 10);
+    const lote  = card.querySelector('.ocr-lote')?.value.trim()  || '';
+    const vence = card.querySelector('.ocr-vence')?.value         || '';
+    const ub    = btn.dataset.ub   || 'ud';
+    const skuId = parseInt(btn.dataset.skuid, 10);
+    const nom   = btn.dataset.skunom;
+
+    if (qty > 0 && lote && vence && new Date(vence) > new Date()) {
+      S.items.push({ skuId, ean:'', nombre:nom, unidadBase:ub, quantity:qty,
+        batchRef:lote, expDate:vence, labelComercial:`${qty} ${ub}` });
+      card.style.opacity = '0.45';
+      btn.textContent = '✓ Añadido';
+      btn.disabled = true;
+      added++;
+    }
+  });
+  renderItemsTable();
+  const num = $('ocr-stat-added').querySelector('.ocr-num');
+  num.textContent = parseInt(num.textContent) + added;
+  if (added > 0) {
+    $('btn-step3-next').disabled = false;
+    toast(`${added} producto${added!==1?'s':''} añadido${added!==1?'s':''} al albarán.`, 'ok');
+  }
+}
+
 
 /** Busca proveedor en la lista por NIF o nombre parcial */
 function matchProveedor(ocrProv) {
@@ -886,6 +970,22 @@ function initStep3() {
   $('btn-add-item').addEventListener('click', añadirItem);
   $('btn-conv-cancel').addEventListener('click', cerrarConv);
   document.addEventListener('click', e=>{ if(!$('ean-wrap')?.contains(e.target)) cerrarDD(); });
+
+  // Panel OCR — skip al escáner manual
+  document.getElementById('btn-ocr-lineas-skip')?.addEventListener('click', () => {
+    document.getElementById('ocr-lineas-panel')?.classList.add('hidden');
+    document.getElementById('input-ean')?.focus();
+  });
+
+  // Panel OCR — añadir todos con match
+  document.getElementById('btn-ocr-add-all')?.addEventListener('click', _añadirTodosOcr);
+
+  // Modal crear SKU
+  document.getElementById('btn-crear-sku-cancel')?.addEventListener('click',
+    () => document.getElementById('modal-crear-sku').classList.add('hidden'));
+  document.getElementById('btn-crear-sku-cancel2')?.addEventListener('click',
+    () => document.getElementById('modal-crear-sku').classList.add('hidden'));
+  document.getElementById('btn-crear-sku-save')?.addEventListener('click', _guardarNuevoSku);
 }
 
 function resolverEan(code) {

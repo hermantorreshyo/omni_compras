@@ -359,32 +359,56 @@
     <div id="step-3" class="hidden space-y-4">
 
 
-      <!-- Panel auto-match líneas OCR (aparece al llegar al paso 3 con OCR procesado) -->
+      <!-- Panel líneas OCR — revisión y match con catálogo OMNI -->
       <div id="ocr-lineas-panel" class="hidden bg-white rounded-2xl border border-brand/20 overflow-hidden">
-        <div class="px-6 py-4 bg-brand/5 border-b border-brand/20 flex items-center justify-between gap-3">
-          <div>
-            <p class="text-sm font-semibold text-brand">Líneas detectadas en el albarán</p>
-            <p class="text-xs text-ink-500 mt-0.5">Revisa los productos detectados automáticamente y añádelos al registro</p>
+        <!-- Header -->
+        <div class="px-5 py-4 bg-brand/5 border-b border-brand/20">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-sm font-semibold text-brand flex items-center gap-2">
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+                </svg>
+                Productos detectados en el albarán
+              </p>
+              <p class="text-xs text-ink-500 mt-0.5">
+                Revisa las cantidades y fechas · Los productos con ✓ se añaden al inventario
+              </p>
+            </div>
+            <button id="btn-ocr-lineas-skip"
+              class="text-xs text-ink-400 hover:text-ink-700 underline whitespace-nowrap flex-shrink-0 mt-0.5">
+              Introducir manualmente
+            </button>
           </div>
-          <button id="btn-ocr-lineas-skip"
-            class="text-xs text-ink-400 hover:text-ink-700 underline whitespace-nowrap transition-colors">
-            Saltar — introducir manualmente
-          </button>
+          <!-- Barra de progreso de match -->
+          <div id="ocr-match-stats" class="mt-3 flex items-center gap-3 text-xs">
+            <span id="ocr-stat-match" class="inline-flex items-center gap-1 font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+              <span class="ocr-num">0</span> con match
+            </span>
+            <span id="ocr-stat-nomatch" class="inline-flex items-center gap-1 font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+              <span class="ocr-num">0</span> sin match
+            </span>
+            <span id="ocr-stat-added" class="inline-flex items-center gap-1 font-medium text-ink-600 bg-ink-100 px-2 py-0.5 rounded-full">
+              <span class="ocr-num">0</span> añadidos
+            </span>
+          </div>
         </div>
-        <div class="overflow-x-auto">
-          <table class="w-full min-w-[700px]">
-            <thead>
-              <tr class="border-b border-ink-100">
-                <th class="text-left py-2 px-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wide">Producto</th>
-                <th class="text-center py-2 px-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wide">Estado</th>
-                <th class="text-left py-2 px-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wide">Cantidad</th>
-                <th class="text-left py-2 px-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wide">Lote</th>
-                <th class="text-left py-2 px-3 text-[10px] font-semibold text-ink-400 uppercase tracking-wide">Vencimiento</th>
-                <th class="py-2 px-3"></th>
-              </tr>
-            </thead>
-            <tbody id="ocr-lineas-body"></tbody>
-          </table>
+
+        <!-- Lista de líneas -->
+        <div id="ocr-lineas-body" class="divide-y divide-ink-100"></div>
+
+        <!-- Footer con acción masiva -->
+        <div id="ocr-lineas-footer" class="px-5 py-3 bg-ink-50 border-t border-ink-200 flex items-center justify-between gap-3">
+          <p class="text-xs text-ink-500">Los productos sin match requieren acción manual antes de continuar.</p>
+          <button id="btn-ocr-add-all"
+            class="flex items-center gap-2 bg-ok hover:bg-emerald-600 text-white text-xs font-semibold
+                   px-4 py-2 rounded-lg transition-colors disabled:opacity-40"
+            disabled>
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+            </svg>
+            Añadir todos con match
+          </button>
         </div>
       </div>
 
@@ -878,19 +902,6 @@
   </div>
 </div>
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
-  // Skip panel OCR → ir al escáner manual
-  document.getElementById('btn-ocr-lineas-skip')?.addEventListener('click', () => {
-    document.getElementById('ocr-lineas-panel')?.classList.add('hidden');
-    document.getElementById('input-ean')?.focus();
-  });
-  // Botón cancelar secundario del modal SKU
-  document.getElementById('btn-crear-sku-cancel2')?.addEventListener('click', () => {
-    document.getElementById('modal-crear-sku')?.classList.add('hidden');
-  });
-});
-</script>
 <script src="app.js"></script>
 </body>
 </html>
