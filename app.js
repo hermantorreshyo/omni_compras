@@ -1439,12 +1439,34 @@ function initStep4() {
     errEl.classList.add('hidden');
 
     try {
-      // Flujo según Postman v6:
-      // 1. POST /inventory/batches  → crear lote → batch_id
-      // 2. POST /inventory/reception con batch_id → registrar stock
+      // ── PASO A: Crear orden de compra con detalles y total
+      // POST /purchasing/orders con details[] inline
+      // supplier_item_id = skuId (el API CORE mapea internamente)
+      // unit_price = costPerUnit del albarán
+      const totalOrden = S.items.reduce((acc, it) =>
+        acc + (it.quantity * (it.costPerUnit ?? 0)), 0
+      );
 
+      const orderRes = await Api.purchasingOrder({
+        supplier_id: S.proveedorId,
+        notes:       S.numAlbaran,
+        details: S.items.map(item => ({
+          supplier_item_id:    item.skuId,
+          quantity_requested:  item.quantity,
+          unit_price:          item.costPerUnit ?? 0,
+        })),
+      });
+      const orderId = orderRes.data?.order?.id ?? orderRes.data?.id;
+      S.purchaseOrderId = orderId;
+
+      // ── PASO B: Aprobar la orden
+      if (orderId) {
+        await Api.approvePurchasingOrder(orderId).catch(() => {});
+      }
+
+      // ── PASO C: Lote + Recepción física por cada ítem
       for (const item of S.items) {
-        // ── PASO 1: Crear el lote (FEFO)
+        // Crear lote (FEFO)
         const batchRes = await Api._call('POST', { action:'batch' }, {
           batch_reference: item.batchRef,
           item_id:         item.skuId,
@@ -1457,7 +1479,7 @@ function initStep4() {
           ?? batchRes.data?.batch_id;
         if (!batchId) throw { error: `No se obtuvo batch_id para "${item.nombre}".` };
 
-        // ── PASO 2: Registrar recepción con el batch_id obtenido
+        // Registrar entrada en kardex
         await Api.receive({
           location_id:        S.bodegaId || 1,
           batch_id:           batchId,
