@@ -96,6 +96,7 @@ const Api = {
    */
   receive:            (b)           => Api._call('POST', { action:'receive' }, b),
   ocrAlbaran:         (img)         => Api._call('POST', { action:'ocr_albaran' }, { image_b64:img }),
+  createSku:          (b)           => Api._call('POST', { action:'create_sku' }, b),
   // ── Proveedores (/purchasing/suppliers) ─────────────
   suppliers:          (q='', isStd=null) => Api._call('GET',  { action:'suppliers', ...(q?{q}:{}), ...(isStd!==null?{is_standardized:isStd}:{}) }),
   createSupplier:     (b)           => Api._call('POST', { action:'suppliers' }, b),
@@ -127,6 +128,7 @@ const S = {
 
   // Formulario
   docB64: null, docNombre: null, ocrData: null,
+  ocrLineas: [],      // líneas del OCR pendientes de match con SKU
   numAlbaran: '', purchaseOrderId: null,
   proveedorId: 0, proveedorNom: '',
   bodegaId: 0,    bodegaNom: '',
@@ -387,6 +389,227 @@ function poblarSelectProveedor() {
   });
 }
 
+
+/* ══════════════════════════════════════════════════════
+   AUTO-MATCH DE LÍNEAS OCR CON SKUs DEL CATÁLOGO
+   Estrategia:
+   1. Match por código de artículo del proveedor (articulo_proveedor)
+      contra sku_final_code o sku_ref
+   2. Match por palabras clave de la descripción (≥ 2 palabras coinciden)
+   Devuelve el SKU encontrado o null
+══════════════════════════════════════════════════════ */
+function matchSkuFromOcr(linea) {
+  if (!linea) return null;
+  const codigo = (linea.articulo_proveedor || '').toLowerCase().trim();
+  const desc   = (linea.descripcion        || '').toLowerCase().trim();
+
+  // Match exacto por código de artículo del proveedor
+  if (codigo) {
+    const byCode = S.skus.find(s =>
+      (s.sku_final_code || '').toLowerCase() === codigo ||
+      (s.sku_ref        || '').toLowerCase() === codigo ||
+      (s.ean13          || '').toLowerCase() === codigo
+    );
+    if (byCode) return byCode;
+  }
+
+  // Match por palabras de la descripción (mínimo 2 palabras clave coincidentes)
+  if (desc.length > 3) {
+    const words = desc.split(/\s+/).filter(w => w.length > 3);
+    const scored = S.skus.map(s => {
+      const sName = (s.name || '').toLowerCase();
+      const hits  = words.filter(w => sName.includes(w)).length;
+      return { sku: s, hits };
+    }).filter(x => x.hits >= 2)
+      .sort((a, b) => b.hits - a.hits);
+    if (scored.length > 0) return scored[0].sku;
+  }
+
+  return null;
+}
+
+/**
+ * Parsea la cantidad del OCR en unidad base.
+ * La cantidad viene como string: "8,00 SCP 2KG", "6 AGP04", "4 C3P4", etc.
+ * Extrae el número y lo convierte a la unidad base del SKU.
+ */
+function parseOcrQuantity(cantStr, skuUnitOfMeasure) {
+  if (!cantStr) return null;
+  // Extraer primer número (entero o decimal con , o .)
+  const match = cantStr.replace(',', '.').match(/^([\d.]+)/);
+  if (!match) return null;
+  const num = parseFloat(match[1]);
+  if (isNaN(num) || num <= 0) return null;
+
+  // Si la cadena contiene unidad de peso/volumen, convertir
+  const lower = cantStr.toLowerCase();
+  const ub    = (skuUnitOfMeasure || 'ud').toLowerCase();
+
+  if (ub === 'g') {
+    if (lower.includes('kg'))  return Math.round(num * 1000);
+    if (lower.includes('2kg')) return Math.round(num * 2000);
+    if (lower.includes('5kg')) return Math.round(num * 5000);
+    if (lower.includes('25kg')) return Math.round(num * 25000);
+    // Si no hay unidad reconocida, asumir que el número ya es la cantidad de embalajes
+    // y la conversión la hace el usuario con el selector de formato
+    return Math.round(num);
+  }
+  if (ub === 'ml') {
+    if (lower.includes(' l') || lower.includes('litro')) return Math.round(num * 1000);
+    if (lower.includes('cl')) return Math.round(num * 10);
+    return Math.round(num);
+  }
+  return Math.round(num);
+}
+
+
+/* ══════════════════════════════════════════════════════
+   PROCESAR LÍNEAS OCR EN EL PASO 3
+   Para cada línea del albarán:
+   - Si hay match con SKU → añadir al panel de revisión
+   - Si no hay match → mostrar fila para buscar o crear SKU
+══════════════════════════════════════════════════════ */
+function _procesarLineasOcr(lineas) {
+  if (!lineas || !lineas.length) { $('input-ean')?.focus(); return; }
+
+  const panel = $('ocr-lineas-panel');
+  if (!panel) { $('input-ean')?.focus(); return; }
+
+  panel.classList.remove('hidden');
+  const tbody = $('ocr-lineas-body');
+  tbody.innerHTML = '';
+
+  lineas.forEach((linea, idx) => {
+    const sku    = matchSkuFromOcr(linea);
+    const tr     = document.createElement('tr');
+    const cantRaw = linea.cantidad_recibida || '';
+    const qty    = sku ? parseOcrQuantity(cantRaw, sku.unit_of_measure) : null;
+
+    if (sku) {
+      // ─ Match encontrado: fila verde con datos pre-cargados ─
+      tr.innerHTML = `
+        <td class="py-2 px-3">
+          <p class="text-xs font-medium text-ink-900 truncate max-w-[160px]">${esc(sku.name)}</p>
+          <p class="text-[10px] text-ink-400 font-mono">${esc(sku.sku_final_code || sku.sku_ref || '')}</p>
+          <p class="text-[10px] text-brand">OCR: ${esc(linea.descripcion || '')}</p>
+        </td>
+        <td class="py-2 px-3 text-center">
+          <span class="inline-flex items-center gap-1 text-[10px] font-medium bg-green-50 text-green-700 border border-green-200 px-2 py-0.5 rounded-full">
+            <svg width="10" height="10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+            Match
+          </span>
+        </td>
+        <td class="py-2 px-3">
+          <div class="flex items-center gap-1">
+            <input type="number" class="ocr-qty w-20 px-2 py-1 text-xs border border-ink-300 rounded font-mono text-center focus:border-brand"
+              value="${qty || ''}" min="0" data-ub="${esc(sku.unit_of_measure||'ud')}" placeholder="cant." />
+            <span class="text-[10px] text-ink-500">${esc(sku.unit_of_measure||'ud')}</span>
+          </div>
+          <p class="text-[10px] text-ink-400 mt-0.5">OCR: ${esc(cantRaw)}</p>
+        </td>
+        <td class="py-2 px-3">
+          <input type="text" class="ocr-lote w-32 px-2 py-1 text-[11px] border border-ink-300 rounded font-mono focus:border-brand"
+            value="${esc(linea.lote || '')}" placeholder="Lote" />
+        </td>
+        <td class="py-2 px-3">
+          <input type="date" class="ocr-vence w-32 px-2 py-1 text-[11px] border border-ink-300 rounded focus:border-brand"
+            value="${esc(linea.fecha_caducidad || '')}" />
+        </td>
+        <td class="py-2 px-3 text-center">
+          <button class="ocr-add-btn bg-ok hover:bg-emerald-600 text-white text-[11px] font-medium px-3 py-1.5 rounded transition-colors"
+            data-idx="${idx}" data-skuid="${esc(String(sku.id))}" data-skunom="${esc(sku.name)}" data-ub="${esc(sku.unit_of_measure||'ud')}">
+            + Añadir
+          </button>
+        </td>`;
+    } else {
+      // ─ Sin match: fila ámbar con opción buscar/crear ─
+      tr.innerHTML = `
+        <td class="py-2 px-3" colspan="2">
+          <p class="text-xs font-medium text-ink-900 truncate max-w-[220px]">${esc(linea.descripcion || '—')}</p>
+          <p class="text-[10px] text-ink-400 font-mono">Artículo proveedor: ${esc(linea.articulo_proveedor || '—')}</p>
+        </td>
+        <td class="py-2 px-3 text-center">
+          <span class="inline-flex text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 rounded-full">
+            Sin match
+          </span>
+        </td>
+        <td class="py-2 px-3" colspan="2">
+          <p class="text-[10px] text-ink-500">Cant. OCR: ${esc(cantRaw)} · Lote: ${esc(linea.lote||'—')}</p>
+        </td>
+        <td class="py-2 px-3 text-center">
+          <div class="flex flex-col gap-1 items-center">
+            <button class="ocr-buscar-btn text-[11px] text-brand underline whitespace-nowrap"
+              data-desc="${esc(linea.descripcion||'')}" data-cant="${esc(cantRaw)}" data-lote="${esc(linea.lote||'')}" data-vence="${esc(linea.fecha_caducidad||'')}">
+              Buscar
+            </button>
+            <button class="ocr-crear-btn text-[11px] text-ink-500 underline whitespace-nowrap"
+              data-desc="${esc(linea.descripcion||'')}" data-ref="${esc(linea.articulo_proveedor||'')}">
+              Crear SKU
+            </button>
+          </div>
+        </td>`;
+    }
+
+    tbody.appendChild(tr);
+  });
+
+  // Listeners de los botones generados
+  tbody.querySelectorAll('.ocr-add-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const row   = btn.closest('tr');
+      const qtyEl = row.querySelector('.ocr-qty');
+      const loteEl = row.querySelector('.ocr-lote');
+      const venceEl = row.querySelector('.ocr-vence');
+      const qty   = parseInt(qtyEl?.value || '0', 10);
+      const lote  = loteEl?.value.trim() || genLote();
+      const vence = venceEl?.value;
+      const ub    = btn.dataset.ub || 'ud';
+      const skuId = parseInt(btn.dataset.skuid, 10);
+      const nom   = btn.dataset.skunom;
+
+      if (!qty || qty <= 0)         { toast('La cantidad debe ser mayor que cero.', 'warn'); return; }
+      if (!lote)                     { toast('El código de lote es obligatorio.', 'warn'); return; }
+      if (!vence)                    { toast('La fecha de vencimiento es obligatoria.', 'warn'); return; }
+      if (new Date(vence) <= new Date()) { toast('Fecha de vencimiento inválida.', 'warn'); return; }
+
+      S.items.push({
+        skuId, ean: '', nombre: nom, unidadBase: ub,
+        quantity: qty, batchRef: lote, expDate: vence,
+        labelComercial: `${qty} ${ub} (OCR)`,
+      });
+      renderItemsTable();
+      btn.closest('tr').remove();
+      // Si no quedan filas sin añadir, ocultar panel
+      if (!tbody.querySelector('tr')) panel.classList.add('hidden');
+      toast(`"${nom}" añadido desde albarán.`, 'ok');
+    });
+  });
+
+  tbody.querySelectorAll('.ocr-buscar-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const desc = btn.dataset.desc;
+      $('input-ean').value = desc;
+      $('input-ean').focus();
+      // Activar dropdown con los primeros resultados
+      const q = desc.split(' ').slice(0,3).join(' ');
+      renderDD(q);
+      // Guardar contexto para pre-rellenar lote/vence al seleccionar
+      $('input-ean').dataset.ocrLote  = btn.dataset.lote;
+      $('input-ean').dataset.ocrVence = btn.dataset.vence;
+      $('input-ean').dataset.ocrCant  = btn.dataset.cant;
+    });
+  });
+
+  tbody.querySelectorAll('.ocr-crear-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $('inp-sku-nombre').value = btn.dataset.desc || '';
+      $('inp-sku-ref').value    = btn.dataset.ref  || '';
+      $('modal-crear-sku').classList.remove('hidden');
+      setTimeout(() => $('inp-sku-nombre').focus(), 80);
+    });
+  });
+}
+
 /** Busca proveedor en la lista por NIF o nombre parcial */
 function matchProveedor(ocrProv) {
   if (!ocrProv) return null;
@@ -419,6 +642,8 @@ function initStep1() {
     $('dz-idle').classList.remove('hidden'); $('dz-preview').classList.add('hidden');
     $('btn-clear-doc').classList.add('hidden');
     $('ocr-panel').classList.add('hidden');
+  $('ocr-lineas-panel')?.classList.add('hidden');
+  if ($('ocr-lineas-body')) $('ocr-lineas-body').innerHTML = '';
   });
   btn.addEventListener('click', () => goStep(2));
 }
@@ -547,7 +772,12 @@ function initStep2() {
     S.bodegaId     = parseInt($('sel-ubicacion').value||'0',10);
     S.bodegaNom    = $('sel-ubicacion').selectedOptions[0]?.text??'Sin asignar';
     goStep(3);
-    setTimeout(()=>$('input-ean')?.focus(),200);
+    // Auto-procesar líneas del OCR: match con SKUs del catálogo
+    if (S.ocrData?.lineas?.length > 0) {
+      setTimeout(() => _procesarLineasOcr(S.ocrData.lineas), 300);
+    } else {
+      setTimeout(()=>$('input-ean')?.focus(),200);
+    }
   });
   $('btn-modal-prov-cancel').addEventListener('click', cerrarModalProveedor);
   document.getElementById('btn-modal-prov-cancel2')?.addEventListener('click', cerrarModalProveedor);
@@ -588,6 +818,48 @@ async function guardarProveedor() {
     errEl.textContent = err.error||'Error al crear proveedor.';
     errEl.classList.remove('hidden');
   } finally { btn.disabled=false; btn.textContent='Crear proveedor'; }
+}
+
+
+async function _guardarNuevoSku() {
+  const nombre  = $('inp-sku-nombre')?.value.trim();
+  const ub      = $('sel-sku-ub')?.value      || 'g';
+  const tipo    = $('sel-sku-tipo')?.value     || 'MP';
+  const ref     = $('inp-sku-ref')?.value.trim() || '';
+  const errEl   = $('modal-sku-error');
+  const btn     = $('btn-crear-sku-save');
+
+  errEl?.classList.add('hidden');
+  if (!nombre) { errEl.textContent='El nombre es obligatorio.'; errEl?.classList.remove('hidden'); return; }
+
+  btn.disabled = true; btn.textContent = 'Creando…';
+  try {
+    const res = await Api.createSku({ name:nombre, unit_of_measure:ub, item_type:tipo, ...(ref?{sku_ref:ref}:{}) });
+    const sku  = res.data?.sku ?? {};
+    const newId = sku.id ?? sku.sku_id;
+    if (!newId) throw { error: 'SKU creado sin ID.' };
+
+    // Añadir al catálogo local
+    S.skus.push(sku);
+    S.byId[String(newId)] = sku;
+
+    // Añadir directamente como ítem con datos del OCR
+    S.items.push({
+      skuId: newId, ean: '', nombre: nombre, unidadBase: ub,
+      quantity: 0, batchRef: genLote(), expDate: '',
+      labelComercial: '(nuevo SKU — completar cantidad)',
+    });
+    renderItemsTable();
+    $('modal-crear-sku').classList.add('hidden');
+    toast(`SKU "${nombre}" creado. Completa la cantidad y caducidad.`, 'ok');
+    // Abrir el panel de conversión con el nuevo SKU
+    abrirConv(sku);
+  } catch(err) {
+    errEl.textContent = err.error || 'Error al crear el SKU.';
+    errEl?.classList.remove('hidden');
+  } finally {
+    btn.disabled=false; btn.textContent='Crear SKU';
+  }
 }
 
 /* ══════════════════════════════════════════════════════
@@ -664,9 +936,13 @@ function abrirConv(sku) {
   const sel=$('sel-uc');
   sel.innerHTML=(UC_OPTS[ub]||UC_OPTS.ud).map(o=>`<option value="${o.v}">${o.l}</option>`).join('');
   sel.value=ub;
-  $('inp-lote').value  = genLote();
-  $('inp-vence').value = '';
+  // Si viene de "Buscar" en la tabla OCR, pre-rellenar con datos del albarán
+  const eanInp = $('input-ean');
+  $('inp-lote').value  = eanInp?.dataset.ocrLote  || genLote();
+  $('inp-vence').value = eanInp?.dataset.ocrVence || '';
   $('inp-qty').value   = '';
+  // Limpiar contexto OCR del input
+  if (eanInp) { delete eanInp.dataset.ocrLote; delete eanInp.dataset.ocrVence; delete eanInp.dataset.ocrCant; }
   $('conv-res').textContent    = '—';
   $('conv-res-ub').textContent = ub;
   $('conv-panel').classList.remove('hidden');

@@ -468,6 +468,32 @@ switch ($action) {
         ok(['albaran' => $ext]);
         break;
 
+
+    // ══════════════════════════════════════════════════════
+    //  CREAR SKU — POST /catalog/skus
+    //  Usado cuando el producto del albarán no existe en OMNI
+    //  Body: { name, unit_of_measure, item_type, family_id? }
+    // ══════════════════════════════════════════════════════
+    case 'create_sku':
+        if ($method !== 'POST') fail('Solo POST.', 405);
+        if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
+        $b = body();
+        if (empty($b['name']))             fail('name es obligatorio.', 400, 'ERR_VALIDATION');
+        if (empty($b['unit_of_measure']))   fail('unit_of_measure es obligatorio (g|ml|ud).', 400, 'ERR_VALIDATION');
+        if (empty($b['item_type']))         fail('item_type es obligatorio (MP|PT|SV...).', 400, 'ERR_VALIDATION');
+        $p = [
+            'name'             => $b['name'],
+            'unit_of_measure'  => $b['unit_of_measure'],
+            'item_type'        => $b['item_type'],
+        ];
+        if (!empty($b['family_id']))    $p['family_id']    = (int)$b['family_id'];
+        if (!empty($b['description']))  $p['description']  = $b['description'];
+        if (!empty($b['sku_ref']))      $p['sku_ref']      = $b['sku_ref'];
+        $res = apiCall('POST', '/catalog/skus', $p, $token, $iid);
+        if (!$res['ok']) fail(omniError($res, 'Error al crear SKU.'), $res['status'] ?: 422, $res['omni_code'] ?? 'ERR_VALIDATION');
+        ok(['sku' => $res['raw']['data'] ?? $res['raw']]);
+        break;
+
     default:
         fail('Acción no reconocida: ' . htmlspecialchars($action), 404, 'ERR_NOT_FOUND');
 }
