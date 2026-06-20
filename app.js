@@ -252,64 +252,53 @@ function goStep(n) {
    7. LOGIN — con interlocutor_id real de la sede elegida
 ══════════════════════════════════════════════════════ */
 async function initLoginView() {
-  _cargarSedesLogin();
-
   $('btn-toggle-pass').addEventListener('click', () => {
     const i = $('inp-password'); i.type = i.type === 'password' ? 'text' : 'password';
   });
-  $('inp-username').addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); $('inp-password').focus(); } });
-  $('inp-password').addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); $('sel-sede').focus(); } });
-  $('sel-sede').addEventListener('keydown',    e => { if (e.key==='Enter') { e.preventDefault(); $('btn-login').click(); } });
+  $('inp-username').addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();$('inp-password').focus();} });
+  $('inp-password').addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();$('btn-login').click();} });
 
   $('form-login').addEventListener('submit', async e => {
     e.preventDefault();
     const username = $('inp-username').value.trim();
     const password = $('inp-password').value;
-    const sedeVal  = $('sel-sede').value;
     const errEl    = $('login-error'), btn = $('btn-login');
     errEl.classList.add('hidden');
 
-    if (!username || !password) { errEl.textContent='Usuario y contraseña obligatorios.'; errEl.classList.remove('hidden'); return; }
-    if (!sedeVal) { errEl.textContent='Selecciona la sede donde trabajas hoy.'; errEl.classList.remove('hidden'); return; }
-
-    const sedeId  = parseInt(sedeVal, 10);
-    const sedeNom = $('sel-sede').selectedOptions[0]?.text ?? '';
+    if (!username || !password) {
+      errEl.textContent = 'Usuario y contraseña obligatorios.';
+      errEl.classList.remove('hidden'); return;
+    }
 
     btn.disabled = true;
     $('btn-login-label').textContent = 'Verificando…';
     $('btn-login-spin').classList.remove('hidden');
 
     try {
-      // v6.6.0: interlocutor_id = sede elegida por el operario (fija el contexto de la sesión)
-      // contraseña inicial = propio username (ej: lesly.garcia)
-      const r = await Api.login(username, password, sedeId);
-
-      // La respuesta normalizada contiene directamente interlocutor_id e interlocutor_name
+      // Login con interlocutor_id=1 (empresa raíz)
+      // La sede real se elige en la pantalla siguiente con el token ya disponible
+      const r = await Api.login(username, password, 1);
       const d = r.data;
-      Api.setSession(d.token, d.interlocutor_id ?? sedeId);
-      S.user            = d;
-      S.interlocutorId  = d.interlocutor_id  ?? sedeId;
-      S.sedePrincipalId = S.interlocutorId;
-      S.sedeName        = d.interlocutor_name ?? sedeNom;
-      S.role            = d.role              ?? '';
-      S.permissions     = d.permissions       ?? [];
 
-      $('hdr-nombre').textContent = d.username  ?? username;
-      $('hdr-sede').textContent   = S.sedeName;
-      $('lbl-fecha').textContent  = new Date().toLocaleString('es-ES',{
-        day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'
-      });
+      // Guardar token — sin sede aún
+      Api._token = d.token;
+      sessionStorage.setItem('omni_token', d.token);
+      localStorage.setItem('omni_token', d.token);
+      S.user        = d;
+      S.role        = d.role        ?? '';
+      S.permissions = d.permissions ?? [];
 
-      await cargarCatalogos();
-      // RBAC de pantallas — determina secciones visibles para este rol/sede
-      await _cargarRbacScreens();
-      showView('view-app'); goStep(1);
+      $('sede-hdr-nombre').textContent = d.username ?? username;
+      $('sede-hdr-nombre').classList.remove('hidden');
+
+      // Ir a pantalla de selección de sede
+      showView('view-sede');
+      // Cargar sedes CON el token ya disponible → 100% fiable
+      _cargarSedesConToken();
 
     } catch (err) {
-      // Manejar error_codes OMNI: ERR_AUTH, ERR_RBAC, etc.
       errEl.textContent =
         err.code === 'ERR_AUTH'    ? 'Usuario o contraseña incorrectos.' :
-        err.code === 'ERR_RBAC'    ? 'Sin permisos para esta sede.' :
         err.code === 'ERR_NETWORK' ? 'Sin conexión con el servidor.' :
         (err.error || 'Error al iniciar sesión.');
       errEl.classList.remove('hidden');
@@ -321,26 +310,75 @@ async function initLoginView() {
   });
 }
 
-function _cargarSedesLogin() {
+/** Carga la lista de sedes usando el token ya obtenido — siempre funciona */
+async function _cargarSedesConToken() {
   const sel = $('sel-sede');
-  // Cargar sedes estáticas INMEDIATAMENTE — siempre disponibles
-  _fallbackSedes(sel);
+  sel.innerHTML = '<option value="">— Cargando sedes… —</option>';
+  try {
+    const r     = await Api.allInterlocutors();
+    const items = r.data?.items ?? [];
+    sel.innerHTML = '<option value="">— Seleccionar sede —</option>';
+    if (!items.length) { _fallbackSedes(sel); return; }
+    items.forEach(i => {
+      const o = document.createElement('option');
+      o.value = i.id;
+      o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
+      sel.appendChild(o);
+    });
+  } catch(_) {
+    _fallbackSedes(sel);
+  }
+}
 
-  // Intentar actualizar desde el API en segundo plano (sin bloquear)
-  fetch('api/omni.php?action=interlocutors&all=1&public=1')
-    .then(r => r.json())
-    .then(raw => {
-      const items = raw.data?.items ?? [];
-      if (!items.length) return; // mantener las estáticas
-      sel.innerHTML = '<option value="">— Seleccionar sede —</option>';
-      items.forEach(i => {
-        const o = document.createElement('option');
-        o.value = i.id;
-        o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
-        sel.appendChild(o);
+/** Inicializa la vista de selección de sede */
+function initSedeView() {
+  $('btn-sede-logout')?.addEventListener('click', () => {
+    Api.clearSession(); S.user = null;
+    showView('view-login');
+  });
+
+  $('btn-confirmar-sede')?.addEventListener('click', async () => {
+    const sel     = $('sel-sede');
+    const sedeVal = sel.value;
+    const errEl   = $('sede-error');
+    const btn     = $('btn-confirmar-sede');
+    errEl.classList.add('hidden');
+
+    if (!sedeVal) {
+      errEl.textContent = 'Selecciona la sede donde trabajas hoy.';
+      errEl.classList.remove('hidden'); return;
+    }
+
+    const sedeId  = parseInt(sedeVal, 10);
+    const sedeNom = sel.selectedOptions[0]?.text ?? '';
+
+    btn.disabled = true;
+    btn.textContent = 'Cargando…';
+
+    try {
+      Api.setSession(Api._token, sedeId);
+      S.interlocutorId  = sedeId;
+      S.sedePrincipalId = sedeId;
+      S.sedeName        = sedeNom;
+
+      $('hdr-nombre').textContent = S.user?.username ?? '—';
+      $('hdr-sede').textContent   = sedeNom;
+      $('lbl-fecha').textContent  = new Date().toLocaleString('es-ES',{
+        day:'2-digit', month:'2-digit', year:'numeric',
+        hour:'2-digit', minute:'2-digit'
       });
-    })
-    .catch(() => {}); // silencioso — ya están las estáticas
+
+      await cargarCatalogos();
+      await _cargarRbacScreens();
+      showView('view-app'); goStep(1);
+
+    } catch(err) {
+      errEl.textContent = err.error || 'Error al cargar la sede.';
+      errEl.classList.remove('hidden');
+      btn.disabled = false;
+      btn.textContent = 'Continuar';
+    }
+  });
 }
 
 function _fallbackSedes(sel) {
@@ -353,6 +391,7 @@ function _fallbackSedes(sel) {
     const o = document.createElement('option'); o.value=id; o.textContent=nom; sel.appendChild(o);
   });
 }
+
 
 /* ══════════════════════════════════════════════════════
    7b. RBAC DE PANTALLAS (manual v6.6.0 §16)
@@ -1477,6 +1516,7 @@ function _logout() {
 document.addEventListener('DOMContentLoaded', () => {
   $('btn-logout').addEventListener('click', _logout);
   $('btn-nuevo').addEventListener('click',  resetFormulario);
+  initSedeView();
   initStep1(); initStep2(); initStep3(); initStep4();
 
   if (Api._token) {  // iid puede ser 0 si el API devuelve interlocutor_id: null
