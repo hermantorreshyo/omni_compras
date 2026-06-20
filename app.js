@@ -1414,12 +1414,14 @@ function initStep4() {
 
     try {
       // ── PASO A: Crear orden de compra con todas las líneas inline
-      // POST /purchasing/orders { supplier_id, details:[{supplier_item_id, quantity_requested, unit_price}] }
-      // Nota: supplier_item_id = SKU id del catálogo; si no existe en supplier-items se pasa item_id
+      // POST /purchasing/orders { supplier_id, details:[{supplier_item_id, item_type, quantity_requested, unit_price}] }
+      // supplier_item_id = SKU id del catálogo general (products_sku) — item_type:'sku' lo distingue
+      // de supplier_items (referencia polimórfica, igual patrón que inventory_stock/batches)
       const orderRes = await Api.purchasingOrder({
         supplier_id: S.proveedorId,
         details: S.items.map(item => ({
           supplier_item_id:    item.skuId,
+          item_type:           'sku',
           quantity_requested:  item.quantity,
           unit_price:          0,
         })),
