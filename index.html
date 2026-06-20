@@ -701,17 +701,76 @@
     </div>
 
     <!-- ── Pantalla de éxito ── -->
-    <div id="step-success" class="hidden">
-      <div class="bg-white rounded-2xl border border-ink-200 p-10 text-center">
-        <div class="w-16 h-16 rounded-full bg-ok/10 flex items-center justify-center mx-auto mb-4">
-          <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="#10b981" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
-          </svg>
+    <!-- ── PASO: ÉXITO ── -->
+    <div id="step-success" class="hidden space-y-4">
+
+      <!-- Cabecera de confirmación -->
+      <div class="bg-white rounded-2xl border border-ink-200 overflow-hidden">
+        <div class="px-6 py-8 text-center border-b border-ink-100"
+          style="background:linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%)">
+          <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+            style="background:#10b981">
+            <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+            </svg>
+          </div>
+          <h2 class="text-xl font-bold text-ink-900 mb-1">¡Albarán registrado con éxito!</h2>
+          <p id="success-msg" class="text-sm text-ink-500">—</p>
         </div>
-        <h2 class="text-xl font-bold text-ink-900 mb-2">Albarán registrado</h2>
-        <p id="success-msg" class="text-ink-500 text-sm mb-6">—</p>
+
+        <!-- Metadatos del albarán registrado -->
+        <div class="grid grid-cols-3 divide-x divide-ink-100 text-center">
+          <div class="px-4 py-4">
+            <p class="text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1">N.º Albarán</p>
+            <p id="sum-ok-albaran" class="text-sm font-bold text-ink-900 font-mono">—</p>
+          </div>
+          <div class="px-4 py-4">
+            <p class="text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1">Proveedor</p>
+            <p id="sum-ok-proveedor" class="text-sm font-semibold text-ink-900 truncate">—</p>
+          </div>
+          <div class="px-4 py-4">
+            <p class="text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1">Sede destino</p>
+            <p id="sum-ok-sede" class="text-sm font-semibold text-ink-900 truncate">—</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detalle de productos registrados -->
+      <div class="bg-white rounded-2xl border border-ink-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-ink-100 flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-semibold text-ink-900">Productos ingresados al inventario</h3>
+            <p id="sum-ok-count" class="text-xs text-ink-500 mt-0.5">—</p>
+          </div>
+          <span class="text-xs font-medium px-3 py-1 rounded-full"
+            style="background:#dcfce7;color:#166534">
+            En kardex ✓
+          </span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full tbl" style="min-width:480px">
+            <thead>
+              <tr>
+                <th class="text-left">Producto</th>
+                <th class="text-right">Cantidad</th>
+                <th class="text-left">Lote</th>
+                <th class="text-left">Vencimiento</th>
+                <th class="text-right">Precio/u</th>
+              </tr>
+            </thead>
+            <tbody id="success-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Acciones -->
+      <div class="flex gap-3 justify-center pb-4">
         <button id="btn-nuevo"
-          class="bg-brand hover:bg-brand-light text-white font-medium text-sm py-2.5 px-6 rounded-lg transition-colors">
+          class="flex items-center gap-2 bg-brand text-white font-semibold text-sm
+                 py-2.5 px-6 rounded-lg transition-colors">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+          </svg>
           Registrar otro albarán
         </button>
       </div>

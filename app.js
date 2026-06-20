@@ -1469,10 +1469,41 @@ function initStep4() {
         });
       }
 
-      // Éxito
-      $('success-msg').textContent=`Albarán ${S.numAlbaran} — ${S.items.length} producto${S.items.length!==1?'s':''} ingresado${S.items.length!==1?'s':''} en el kardex.`;
-      [1,2,3,4].forEach(i=>$(`step-${i}`)?.classList.add('hidden'));
+      // ── ÉXITO: rellenar vista de confirmación ─────────────
+      const n = S.items.length;
+      $('success-msg').textContent =
+        `${n} producto${n!==1?'s':''} ingresado${n!==1?'s':''} al inventario correctamente.`;
+      $('sum-ok-albaran').textContent  = S.numAlbaran   || '—';
+      $('sum-ok-proveedor').textContent = S.proveedorNom || `ID ${S.proveedorId}`;
+      $('sum-ok-sede').textContent     = S.sedeName     || S.bodegaNom || '—';
+      $('sum-ok-count').textContent    = `${n} producto${n!==1?'s':''} · ${new Date().toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}`;
+
+      // Tabla de productos registrados
+      const tbody = $('success-tbody');
+      tbody.innerHTML = '';
+      S.items.forEach(it => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>
+            <p class="font-medium text-ink-900">${esc(it.nombre)}</p>
+            <p class="text-xs text-ink-400 font-mono">${esc(it.unidadBase)}</p>
+          </td>
+          <td class="text-right font-mono font-semibold text-ink-900">
+            ${formatQuantity(it.quantity, {unit_of_measure:it.unidadBase, pack_size:it.packSize||1})}
+          </td>
+          <td class="font-mono text-xs text-ink-600">${esc(it.batchRef)}</td>
+          <td class="text-ink-600">${fmtDate(it.expDate)}</td>
+          <td class="text-right font-mono text-xs text-ink-700">
+            ${it.costPerUnit > 0 ? it.costPerUnit.toFixed(2)+' €' : '—'}
+          </td>`;
+        tbody.appendChild(tr);
+      });
+
+      // Ocultar pasos y mostrar éxito
+      [1,2,3,4].forEach(i => $(`step-${i}`)?.classList.add('hidden'));
       $('step-success').classList.remove('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      toast(`Albarán ${S.numAlbaran} registrado correctamente.`, 'ok');
 
     } catch (err) {
       // Propagar error_code OMNI con mensaje útil
