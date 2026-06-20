@@ -252,40 +252,48 @@ function goStep(n) {
 /* ══════════════════════════════════════════════════════
    7. LOGIN — con interlocutor_id real de la sede elegida
 ══════════════════════════════════════════════════════ */
-async function initLoginView() {
+function initLoginView() {
+  // {once:true} garantiza que cada listener se registra una sola vez aunque
+  // initLoginView() se llame varias veces durante el ciclo de vida de la app
   $('btn-toggle-pass').addEventListener('click', () => {
-    const i = $('inp-password'); i.type = i.type === 'password' ? 'text' : 'password';
+    const i = $('inp-password');
+    i.type = i.type === 'password' ? 'text' : 'password';
+  }, { once: false });  // toggle sí puede repetirse
+
+  $('inp-username').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); $('inp-password').focus(); }
   });
-  $('inp-username').addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault();$('inp-password').focus();} });
-  $('inp-password').addEventListener('keydown', e => { if (e.key==='Enter'){e.preventDefault(); $('btn-login').click();} });
 
-  $('btn-login').addEventListener('click', async e => {
-    const username = $('inp-username').value.trim();
-    const password = $('inp-password').value;
-    const errEl    = $('login-error'), btn = $('btn-login');
-    errEl.classList.add('hidden');
-
-    if (!username || !password) {
-      errEl.textContent = 'Usuario y contraseña obligatorios.';
-      errEl.classList.remove('hidden'); return;
-    }
-
-    // Guardar credenciales temporalmente para usarlas tras elegir la sede
-    S._pendingUsername = username;
-    S._pendingPassword = password;
-
-    // Mostrar pantalla de selección de sede con lista estática inmediata
-    showView('view-sede');
-    _cargarSedesVista();
+  $('inp-password').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); _doLogin(); }
   });
+
+  $('btn-login').addEventListener('click', () => _doLogin());
 }
 
-/** Muestra sedes estáticas inmediatamente, actualiza desde el API si es posible */
-function _cargarSedesVista() {
-  const sel = $('sel-sede');
-  // Fallback estático SIEMPRE primero — visible instantáneamente
-  _fallbackSedes(sel);
+/** Ejecuta el login: guarda credenciales y muestra la pantalla de selección de sede */
+function _doLogin() {
+  const username = ($('inp-username').value || '').trim();
+  const password = ($('inp-password').value || '');
+  const errEl    = $('login-error');
+
+  errEl.classList.add('hidden');
+
+  if (!username || !password) {
+    errEl.textContent = 'Usuario y contraseña son obligatorios.';
+    errEl.classList.remove('hidden');
+    return;
+  }
+
+  // Guardar credenciales para el login real al confirmar la sede
+  S._pendingUsername = username;
+  S._pendingPassword = password;
+
+  // Mostrar pantalla de sede con lista estática inmediata
+  _fallbackSedes($('sel-sede'));
+  showView('view-sede');
 }
+
 
 /** Inicializa la vista de selección de sede */
 function initSedeView() {
@@ -340,9 +348,10 @@ function initSedeView() {
 
     } catch(err) {
       const msg =
-        err.code === 'ERR_AUTH'    ? 'Credenciales incorrectas. Vuelve atrás e inténtalo de nuevo.' :
+        err.code === 'ERR_AUTH'    ? 'Usuario o contraseña incorrectos.' :
+        err.code === 'ERR_RBAC'    ? 'Sin permisos para esta sede.' :
         err.code === 'ERR_NETWORK' ? 'Sin conexión con el servidor.' :
-        (err.error || 'Error al autenticar.');
+        (err.error || 'Error al autenticar. Inténtalo de nuevo.');
       errEl.textContent = msg;
       errEl.classList.remove('hidden');
       btn.disabled = false;
