@@ -513,7 +513,7 @@ function parseOcrQuantity(cantStr, sku) {
   const num = parseFloat(match[1]);
   if (isNaN(num) || num <= 0) return null;
 
-  const ub    = (sku?.unit_of_measure || typeof sku === 'string' ? (sku || 'ud') : 'ud').toLowerCase();
+  const ub    = (typeof sku === 'string' ? sku : (sku?.unit_of_measure ?? 'ud')).toLowerCase();
   const lower = str.toLowerCase();
 
   // SKU en UNIDADES FÍSICAS — devolver el número sin conversión
@@ -706,7 +706,8 @@ function _bindOcrCardListeners() {
       if (new Date(vence) <= new Date()){ toast('Fecha de vencimiento inválida.', 'warn'); return; }
 
       S.items.push({ skuId, ean:'', nombre:nom, unidadBase:ub, quantity:qty,
-        batchRef:lote, expDate:vence, labelComercial:`${qty} ${ub}` });
+        batchRef:lote, expDate:vence, labelComercial:`${qty} ${ub}`,
+        costPerUnit: 0, discount: 0 });
       renderItemsTable();
 
       // Marcar card como añadida
@@ -762,7 +763,8 @@ function _añadirTodosOcr() {
 
     if (qty > 0 && lote && vence && new Date(vence) > new Date()) {
       S.items.push({ skuId, ean:'', nombre:nom, unidadBase:ub, quantity:qty,
-        batchRef:lote, expDate:vence, labelComercial:`${qty} ${ub}` });
+        batchRef:lote, expDate:vence, labelComercial:`${qty} ${ub}`,
+        costPerUnit: 0, discount: 0 });
       card.style.opacity = '0.45';
       btn.textContent = '✓ Añadido';
       btn.disabled = true;
@@ -1347,7 +1349,8 @@ function añadirItem() {
     quantity:      quantityFinal,
     batchRef:      lote,
     expDate:       vence,
-    // §20: labelComercial muestra cantidad legible con peso total si pack_size > 1
+    costPerUnit:   0,
+    discount:      0,
     labelComercial: formatQuantity(quantityFinal, { unit_of_measure: ub, pack_size: ps2 }),
   });
   renderItemsTable(); cerrarConv();
@@ -1419,7 +1422,7 @@ function initStep4() {
           item_id:         item.skuId,
           item_type:       'sku',
           expiration_date: item.expDate,
-          cost_per_unit:   0,
+          cost_per_unit:   parseFloat(item.costPerUnit ?? 0),
         });
         const batchId = batchRes.data?.batch?.id
           ?? batchRes.data?.id
