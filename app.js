@@ -1493,7 +1493,7 @@ function _logout() {
 /* ══════════════════════════════════════════════════════
    14. BOOTSTRAP
 ══════════════════════════════════════════════════════ */
-document.addEventListener('DOMContentLoaded', () => {
+function _bootstrap() {
   $('btn-logout').addEventListener('click', _logout);
   $('btn-nuevo').addEventListener('click',  resetFormulario);
   initSedeView();
@@ -1514,7 +1514,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   } else {
     showView('view-login');
-    return;
   }
-  // (initLoginView se llama solo en el else — no duplicar)
-});
+}
+
+// app.js se inyecta dinámicamente (cache-busting) y puede terminar de cargar
+// DESPUÉS de que DOMContentLoaded ya haya disparado — comprobar readyState
+// en vez de depender ciegamente del evento, o el bootstrap nunca se ejecuta.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _bootstrap);
+} else {
+  _bootstrap();
+}
