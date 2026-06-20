@@ -1,6 +1,6 @@
 /**
  * JOSEPAN 360 · OMNI · [1002] Albaranes de Compras
- * app.js (v10.0 — OMNI API CORE v6.6.0)
+ * app.js (v18.0 — OMNI API CORE v6.6.0)
  *
  * Cambios respecto a v9 según manual-desarrollador-subsistemas.md:
  *  - login: interlocutor_id = sede elegida por el operario (NO hardcoded a 1)
@@ -1227,50 +1227,94 @@ function abrirConv(sku) {
   $('hid-sku-ub').value   = ub;
   $('hid-sku-name').value = sku.name||'';
   if ($('hid-sku-ps')) $('hid-sku-ps').value = String(ps);
-  const sel=$('sel-uc');
-  sel.innerHTML=(UC_OPTS[ub]||UC_OPTS.ud).map(o=>`<option value="${o.v}">${o.l}</option>`).join('');
-  sel.value=ub;
-  // Si viene de "Buscar" en la tabla OCR, pre-rellenar con datos del albarán
+  // sel-uc está oculto pero necesita valor para compatibilidad con convertir()
+  const sel = $('sel-uc');
+  sel.innerHTML = `<option value="${ub}">${ub}</option>`;
+  sel.value = ub;
+
+  // Etiqueta y hint según §20
+  const qtyLabel = $('conv-qty-label');
+  const qtyHint  = $('conv-qty-hint');
+  if (qtyLabel) {
+    if (ub === 'ud' && ps > 1) {
+      const pkLabel = ps >= 1000 ? (ps/1000).toFixed(0) + ' kg' : ps + ' g';
+      qtyLabel.textContent = `(bolsas/unidades de ${pkLabel})`;
+      if (qtyHint) qtyHint.innerHTML =
+        `<span class="font-medium text-ink-700">Introduce cuántas unidades físicas.</span><br>` +
+        `Cada unidad pesa <strong>${pkLabel}</strong>. El peso total se calcula automáticamente.`;
+    } else if (ub === 'g') {
+      qtyLabel.textContent = '(gramos)';
+      if (qtyHint) qtyHint.innerHTML =
+        `Introduce la cantidad en <strong>gramos</strong>.<br>` +
+        `Puedes escribir 1000 para 1 kg, 25000 para 25 kg, etc.`;
+    } else if (ub === 'ml') {
+      qtyLabel.textContent = '(mililitros)';
+      if (qtyHint) qtyHint.innerHTML =
+        `Introduce la cantidad en <strong>mililitros</strong>.<br>` +
+        `1 litro = 1000 ml.`;
+    } else {
+      qtyLabel.textContent = '(unidades)';
+      if (qtyHint) qtyHint.textContent = 'Introduce el número de unidades.';
+    }
+  }
+
+  // Pre-rellenar desde OCR si viene de "Buscar"
   const eanInp = $('input-ean');
   $('inp-lote').value  = eanInp?.dataset.ocrLote  || genLote();
   $('inp-vence').value = eanInp?.dataset.ocrVence || '';
   $('inp-qty').value   = '';
-  // Limpiar contexto OCR del input
   if (eanInp) { delete eanInp.dataset.ocrLote; delete eanInp.dataset.ocrVence; delete eanInp.dataset.ocrCant; }
+
+  // Ocultar resultado hasta que el usuario escriba
+  $('conv-result-box')?.classList.add('hidden');
   $('conv-res').textContent    = '—';
-  $('conv-res-ub').textContent = ub;
+  $('conv-res-ub').textContent = '';
+  $('conv-peso-total')?.classList.add('hidden');
+
   $('conv-panel').classList.remove('hidden');
-  setTimeout(()=>$('inp-qty').focus(),80);
+  setTimeout(() => $('inp-qty').focus(), 80);
 }
 
 function actualizarConv() {
-  const val = $('inp-qty').value;
-  const ub  = $('hid-sku-ub').value;
-  const uc  = $('sel-uc').value;
-  const ps  = parseInt($('hid-sku-ps')?.value || '1', 10); // pack_size del SKU
-  const qty = parseFloat(val);
+  const val  = $('inp-qty').value;
+  const ub   = $('hid-sku-ub').value  || 'ud';
+  const uc   = $('sel-uc').value       || ub;
+  const ps   = parseInt($('hid-sku-ps')?.value || '1', 10);
+  const qty  = parseFloat(val);
+
+  const box     = $('conv-result-box');
+  const resEl   = $('conv-res');
+  const pesoEl  = $('conv-peso-total');
 
   if (!qty || qty <= 0) {
-    $('conv-res').textContent    = '—';
-    $('conv-res-ub').textContent = ub;
+    box?.classList.add('hidden');
     return;
   }
 
-  const base = convertir(val, ub, uc);
+  // La cantidad enviada al API = qty para 'ud', o convertida para g/ml
+  const quantityForApi = (ub === 'ud') ? Math.round(qty) : convertir(val, ub, uc);
+  const displayStr     = formatQuantity(quantityForApi, { unit_of_measure: ub, pack_size: ps });
 
-  // Mostrar cantidad y, si hay pack_size, el peso total informativo
-  if (ub === 'ud' && ps > 1) {
-    const totalG = base * ps;
-    $('conv-res').textContent = base.toLocaleString('es-ES');
-    $('conv-res-ub').textContent = `ud (${totalG >= 1000 ? (totalG/1000).toFixed(2) + ' kg' : totalG + ' g'})`;
-  } else {
-    $('conv-res').textContent = formatQuantity(base, { unit_of_measure: ub, pack_size: ps });
-    $('conv-res-ub').textContent = '';
+  if (resEl) resEl.textContent = displayStr;
+  $('conv-res-ub').textContent = '';
+
+  // Para ud con pack_size > 1: mostrar el peso total informativo §20
+  if (pesoEl) {
+    if (ub === 'ud' && ps > 1) {
+      const totalG = quantityForApi * ps;
+      const kgStr  = totalG >= 1000 ? (totalG/1000).toFixed(2) + ' kg' : totalG + ' g';
+      pesoEl.textContent = `Peso total: ${kgStr} (${quantityForApi} × ${ps >= 1000 ? (ps/1000)+'kg' : ps+'g'})`;
+      pesoEl.classList.remove('hidden');
+    } else {
+      pesoEl.classList.add('hidden');
+    }
   }
+
+  box?.classList.remove('hidden');
 }
 
 function añadirItem() {
-  const qty=parseFloat($('inp-qty').value), uc=$('sel-uc').value, ub=$('hid-sku-ub').value;
+  const qty=parseFloat($('inp-qty').value), ub=$('hid-sku-ub').value, uc=ub; // §20: uc=ub (sin selector de formato)
   const lote=$('inp-lote').value.trim(), vence=$('inp-vence').value;
   if (!qty||qty<=0)              {toast('Cantidad > 0','warn');return;}
   if (!lote)                     {toast('Código de lote obligatorio.','warn');return;}

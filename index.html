@@ -5,23 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>JOSEPAN 360 · Albaranes de Compras [1002]</title>
 
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            brand:  { DEFAULT:'#642a72', light:'#8a3d9a', dark:'#4a1f54' },
-            ink:    { DEFAULT:'#0f172a', 50:'#f8fafc', 100:'#f1f5f9', 200:'#e2e8f0', 300:'#cbd5e1', 400:'#94a3b8', 500:'#64748b', 600:'#475569', 700:'#334155', 800:'#1e293b', 900:'#0f172a' },
-            ok:     '#10b981',
-            danger: '#ef4444',
-            warn:   '#f59e0b',
-          },
-          fontFamily: { sans: ['"Inter"','system-ui','sans-serif'] }
-        }
-      }
-    }
-  </script>
+  <link rel="stylesheet" href="styles.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
@@ -423,7 +407,7 @@
             class="hidden bg-brand text-white text-xs font-bold px-2.5 py-1 rounded-full">0</span>
         </div>
         <div class="p-6 space-y-3">
-          <div class="relative" id="ean-wrap">
+          <div class="relative z-40" id="ean-wrap">
             <input id="input-ean" type="text" inputmode="none"
               placeholder="Escanear EAN-13 o escribir nombre del producto…"
               autocomplete="off" spellcheck="false"
@@ -439,7 +423,7 @@
             </button>
             <!-- Dropdown búsqueda predictiva -->
             <div id="ean-dropdown"
-              class="hidden absolute left-0 right-0 top-full mt-1 z-20 bg-white border border-ink-200
+              class="hidden absolute left-0 right-0 top-full mt-1 z-50 bg-white border border-ink-200
                      rounded-xl overflow-hidden max-h-56 overflow-y-auto">
             </div>
           </div>
@@ -465,41 +449,37 @@
           <input id="hid-sku-ean"  type="hidden" />
           <input id="hid-sku-ub"   type="hidden" />
           <input id="hid-sku-name" type="hidden" />
-          <input id="hid-sku-ps"   type="hidden" value="1" /> <!-- pack_size §20 -->
+          <input id="hid-sku-ps"   type="hidden" value="1" />
+          <!-- sel-uc se mantiene oculto para compatibilidad con convertir() -->
+          <select id="sel-uc" class="hidden"></select>
 
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-ink-700 mb-1.5" for="sel-uc">Formato recibido</label>
-              <div class="relative">
-                <select id="sel-uc"
-                  class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm focus:border-brand appearance-none bg-white pr-8">
-                </select>
-                <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400 pointer-events-none"
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-                </svg>
-              </div>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-ink-700 mb-1.5" for="inp-qty">Cantidad</label>
-              <input id="inp-qty" type="number" inputmode="decimal" min="0" step="any" placeholder="0"
-                class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm font-mono
+          <!-- §20: Cantidad en unidades físicas del SKU -->
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5" for="inp-qty">
+              Cantidad <span id="conv-qty-label" class="text-ink-400 font-normal text-xs ml-1"></span>
+              <span class="text-danger">*</span>
+            </label>
+            <div class="flex items-center gap-3">
+              <input id="inp-qty" type="number" inputmode="decimal" min="1" step="1" placeholder="0"
+                class="w-40 px-3.5 py-2.5 rounded-lg border border-ink-300 text-lg font-mono
                        font-bold text-ink-900 text-center focus:border-brand" />
+              <div id="conv-qty-hint" class="text-xs text-ink-400 leading-snug"></div>
             </div>
           </div>
 
-          <!-- Resultado conversión -->
-          <div class="flex items-center justify-between bg-brand/8 border border-brand/20 rounded-xl px-4 py-3">
+          <!-- Resultado: lo que entrará al inventario §20 -->
+          <div id="conv-result-box"
+            class="flex items-center justify-between bg-brand/5 border border-brand/20 rounded-xl px-4 py-3 hidden">
             <div>
-              <p class="text-xs font-medium text-brand/70 uppercase tracking-wide">Entrará al inventario</p>
-              <p class="text-xl font-bold text-brand mt-0.5">
-                <span id="conv-res">—</span>
-                <span id="conv-res-ub" class="text-sm font-medium text-brand/60 ml-1">—</span>
+              <p class="text-xs font-medium text-ink-500 uppercase tracking-wide mb-0.5">
+                Entrará al inventario
               </p>
+              <p class="text-xl font-bold text-brand">
+                <span id="conv-res">—</span>
+                <span id="conv-res-ub" class="text-sm font-medium text-brand/50 ml-1"></span>
+              </p>
+              <p id="conv-peso-total" class="text-xs text-ink-400 mt-0.5 hidden"></p>
             </div>
-            <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="#642a72" stroke-width="1.5" opacity="0.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5 7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5"/>
-            </svg>
           </div>
 
           <!-- Lote + vencimiento -->
