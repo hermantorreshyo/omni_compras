@@ -959,11 +959,11 @@ function initStep3() {
   const ean=$('input-ean');
   ean.addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault();resolverEan(ean.value.trim());} });
   $('btn-scan').addEventListener('click', ()=>resolverEan(ean.value.trim()));
-  let _dt=null;
+  // renderDD ya tiene su propio debounce de 400ms para el API — no añadir uno extra
   ean.addEventListener('input', e => {
-    clearTimeout(_dt); const q=e.target.value.trim();
+    const q=e.target.value.trim();
     if (q.length<2){cerrarDD();return;}
-    _dt=setTimeout(()=>renderDD(q),200);
+    renderDD(q);
   });
   $('inp-qty').addEventListener('input', actualizarConv);
   $('sel-uc').addEventListener('change',  actualizarConv);
@@ -988,35 +988,161 @@ function initStep3() {
   document.getElementById('btn-crear-sku-save')?.addEventListener('click', _guardarNuevoSku);
 }
 
-function resolverEan(code) {
-  cerrarDD(); if (!code) return;
-  const sku = S.byEan[code] ?? S.skus.find(s =>
-    (s.sku_final_code||s.sku_code||'').toLowerCase()===code.toLowerCase() ||
-    (s.name||'').toLowerCase().includes(code.toLowerCase())
-  );
-  if (sku) { abrirConv(sku); $('input-ean').value=''; }
-  else toast(`"${code}" no encontrado en el catálogo.`,'error');
+/**
+ * resolverEan — busca primero en caché local, luego en el API si no hay resultado.
+ * Acepta: EAN-13, sku_final_code exacto, o nombre parcial.
+ */
+async function resolverEan(code) {
+  cerrarDD();
+  if (!code) return;
+
+  // 1. Búsqueda local inmediata (EAN exacto o código exacto)
+  const skuLocal = S.byEan[code]
+    ?? S.skus.find(s =>
+        (s.sku_final_code||s.sku_code||'').toLowerCase() === code.toLowerCase()
+      );
+
+  if (skuLocal) { abrirConv(skuLocal); $('input-ean').value = ''; return; }
+
+  // 2. No hay match local → buscar en el API
+  const dd = $('ean-dropdown');
+  dd.innerHTML = `<div class="px-4 py-3 text-xs text-ink-500 flex items-center gap-2">
+    <svg class="spin w-3 h-3 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+    </svg>
+    Buscando en catálogo OMNI…
+  </div>`;
+  dd.classList.remove('hidden');
+
+  try {
+    const res   = await Api.skus(code, 20);
+    const items = res.data?.items ?? [];
+
+    // Añadir al caché local los resultados nuevos
+    items.forEach(s => {
+      S.byId[String(s.id)] = s;
+      if (s.ean13) S.byEan[s.ean13] = s;
+    });
+
+    if (!items.length) {
+      dd.innerHTML = `<div class="px-4 py-3 text-xs text-ink-500">
+        No encontrado en el catálogo OMNI.
+        <button class="ml-2 text-brand underline font-medium ocr-crear-inline"
+          data-desc="${esc(code)}">Crear SKU</button>
+      </div>`;
+      dd.querySelector('.ocr-crear-inline')?.addEventListener('click', () => {
+        $('inp-sku-nombre').value = code;
+        $('inp-sku-ref').value    = '';
+        $('modal-crear-sku').classList.remove('hidden');
+        cerrarDD();
+      });
+      return;
+    }
+
+    _renderDDItems(items);
+
+  } catch(_) {
+    cerrarDD();
+    toast(`Error al buscar "${code}" en el catálogo.`, 'error');
+  }
 }
 
+/**
+ * renderDD — muestra dropdown con resultados locales.
+ * Si hay menos de 3 resultados locales, complementa con búsqueda en el API.
+ */
+let _ddTimer = null;
 function renderDD(q) {
-  const ql=q.toLowerCase();
-  const res=S.skus.filter(s=>
-    (s.name||'').toLowerCase().includes(ql)||
-    (s.ean13||'').startsWith(q)||
+  clearTimeout(_ddTimer);
+  if (!q || q.length < 2) { cerrarDD(); return; }
+
+  const ql  = q.toLowerCase();
+  const local = S.skus.filter(s =>
+    (s.name||'').toLowerCase().includes(ql) ||
+    (s.ean13||'').startsWith(q) ||
     (s.sku_final_code||s.sku_code||'').toLowerCase().startsWith(ql)
-  ).slice(0,8);
-  const dd=$('ean-dropdown');
-  if (!res.length){cerrarDD();return;}
-  dd.innerHTML=res.map(s=>`
-    <div class="dd-row flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-ink-50 border-b border-ink-100 last:border-0" data-id="${esc(s.id)}">
-      <div class="min-w-0">
+  ).slice(0, 8);
+
+  const dd = $('ean-dropdown');
+
+  if (local.length >= 3) {
+    // Suficientes resultados locales — mostrar sin llamar al API
+    _renderDDItems(local);
+    return;
+  }
+
+  // Pocos o ningún resultado local → mostrar los que hay + spinner + buscar en API
+  if (local.length > 0) _renderDDItems(local);
+  else {
+    dd.innerHTML = `<div class="px-4 py-2.5 text-xs text-ink-500 flex items-center gap-2">
+      <svg class="spin w-3 h-3" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+      </svg>
+      Buscando en catálogo OMNI…
+    </div>`;
+    dd.classList.remove('hidden');
+  }
+
+  // Debounce 400ms para la llamada al API
+  _ddTimer = setTimeout(async () => {
+    try {
+      const res   = await Api.skus(q, 10);
+      const items = res.data?.items ?? [];
+
+      // Añadir al caché local
+      items.forEach(s => {
+        S.byId[String(s.id)] = s;
+        if (s.ean13) S.byEan[s.ean13] = s;
+      });
+
+      // Combinar con resultados locales (deduplicar por id)
+      const ids    = new Set(local.map(s => String(s.id)));
+      const extra  = items.filter(s => !ids.has(String(s.id)));
+      const merged = [...local, ...extra].slice(0, 10);
+
+      if (!merged.length) {
+        dd.innerHTML = `<div class="px-4 py-3 text-xs text-ink-500">
+          No encontrado. <button class="ml-1 text-brand underline font-medium ocr-crear-inline"
+            data-desc="${esc(q)}">Crear SKU nuevo</button>
+        </div>`;
+        dd.classList.remove('hidden');
+        dd.querySelector('.ocr-crear-inline')?.addEventListener('click', () => {
+          $('inp-sku-nombre').value = q;
+          $('modal-crear-sku').classList.remove('hidden');
+          cerrarDD();
+        });
+        return;
+      }
+
+      _renderDDItems(merged);
+
+    } catch(_) { /* silencioso: mantener lo que hay */ }
+  }, 400);
+}
+
+/** Renderiza los items en el dropdown y conecta los click listeners */
+function _renderDDItems(items) {
+  const dd = $('ean-dropdown');
+  dd.innerHTML = items.map(s => `
+    <div class="dd-row flex items-center gap-3 px-4 py-2.5 cursor-pointer
+      hover:bg-ink-50 border-b border-ink-100 last:border-0" data-id="${esc(String(s.id))}">
+      <div class="min-w-0 flex-1">
         <p class="text-sm font-medium text-ink-900 truncate">${esc(s.name||'—')}</p>
-        <p class="text-xs text-ink-500 font-mono">${esc(s.sku_final_code||s.sku_code||'')} · EAN ${esc(s.ean13||'—')} · ${esc(s.unit_of_measure||'—')}</p>
+        <p class="text-xs text-ink-500 font-mono">
+          ${esc(s.sku_final_code||s.sku_code||'—')} · ${esc(s.unit_of_measure||'—')}
+          ${s.ean13 ? '· EAN ' + esc(s.ean13) : ''}
+        </p>
       </div>
     </div>`).join('');
   dd.classList.remove('hidden');
-  dd.querySelectorAll('.dd-row').forEach(el=>{
-    el.addEventListener('click',()=>{const s=S.byId[el.dataset.id];if(s){abrirConv(s);$('input-ean').value='';}cerrarDD();});
+  dd.querySelectorAll('.dd-row').forEach(el => {
+    el.addEventListener('click', () => {
+      const s = S.byId[el.dataset.id];
+      if (s) { abrirConv(s); $('input-ean').value = ''; }
+      cerrarDD();
+    });
   });
 }
 
