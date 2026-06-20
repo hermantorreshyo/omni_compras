@@ -630,6 +630,20 @@ function _procesarLineasOcr(lineas) {
                 value="${esc(vence)}" />
             </div>
           </div>
+          <div class="mt-2 grid grid-cols-2 gap-2">
+            <div>
+              <label class="block text-[10px] font-medium text-ink-400 uppercase tracking-wide mb-1">Precio/u (€)</label>
+              <input type="number" class="ocr-precio w-full px-2 py-1.5 text-xs border border-ink-300
+                rounded-lg font-mono focus:border-brand focus:outline-none"
+                value="${linea.precio_unitario ? String(linea.precio_unitario).replace(',','.') : ''}" min="0" step="0.01" placeholder="0.00" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-medium text-ink-400 uppercase tracking-wide mb-1">Descuento (%)</label>
+              <input type="number" class="ocr-dto w-full px-2 py-1.5 text-xs border border-ink-300
+                rounded-lg font-mono focus:border-brand focus:outline-none"
+                value="" min="0" max="100" step="0.01" placeholder="0" />
+            </div>
+          </div>
         </div>`;
     } else {
       // ── CARD SIN MATCH ──────────────────────────────────
@@ -705,9 +719,11 @@ function _bindOcrCardListeners() {
       if (!vence)                       { toast('La fecha de vencimiento es obligatoria.', 'warn'); return; }
       if (new Date(vence) <= new Date()){ toast('Fecha de vencimiento inválida.', 'warn'); return; }
 
+      const ocrPrecio = parseFloat(String(card.querySelector('.ocr-precio')?.value || '0').replace(',','.')) || 0;
+      const ocrDto    = parseFloat(card.querySelector('.ocr-dto')?.value    || '0') || 0;
       S.items.push({ skuId, ean:'', nombre:nom, unidadBase:ub, quantity:qty,
         batchRef:lote, expDate:vence, labelComercial:`${qty} ${ub}`,
-        costPerUnit: 0, discount: 0 });
+        costPerUnit: ocrPrecio, discount: ocrDto });
       renderItemsTable();
 
       // Marcar card como añadida
@@ -762,9 +778,11 @@ function _añadirTodosOcr() {
     const nom   = btn.dataset.skunom;
 
     if (qty > 0 && lote && vence && new Date(vence) > new Date()) {
+      const ocrPrecio = parseFloat(String(card.querySelector('.ocr-precio')?.value || '0').replace(',','.')) || 0;
+      const ocrDto    = parseFloat(card.querySelector('.ocr-dto')?.value    || '0') || 0;
       S.items.push({ skuId, ean:'', nombre:nom, unidadBase:ub, quantity:qty,
         batchRef:lote, expDate:vence, labelComercial:`${qty} ${ub}`,
-        costPerUnit: 0, discount: 0 });
+        costPerUnit: ocrPrecio, discount: ocrDto });
       card.style.opacity = '0.45';
       btn.textContent = '✓ Añadido';
       btn.disabled = true;
@@ -1305,6 +1323,14 @@ function abrirConv(sku) {
 
   // Ocultar resultado hasta que el usuario escriba
   $('conv-peso-total')?.classList.add('hidden');
+  // Precio y descuento: pre-rellenar desde datos OCR si disponibles
+  const ocrLinea = S.ocrData?.lineas?.find(l =>
+    (l.descripcion || '').toLowerCase().includes((sku.name || '').toLowerCase().substring(0, 8))
+  );
+  $('inp-precio').value = ocrLinea?.precio_unitario
+    ? parseFloat(String(ocrLinea.precio_unitario).replace(',', '.')) || ''
+    : '';
+  $('inp-dto').value = '';
   $('conv-panel').classList.remove('hidden');
   setTimeout(() => $('inp-qty').focus(), 80);
 }
@@ -1338,8 +1364,10 @@ function añadirItem() {
   if (!vence)                    {toast('Fecha de vencimiento obligatoria.','warn');return;}
   if (new Date(vence)<=new Date()){toast('Fecha de vencimiento inválida.','warn');return;}
 
-  const ps2 = parseInt($('hid-sku-ps')?.value || '1', 10);
+  const ps2        = parseInt($('hid-sku-ps')?.value || '1', 10);
   const quantityFinal = convertir(qty, ub, uc);
+  const costPerUnit   = parseFloat($('inp-precio')?.value || '0') || 0;
+  const discount      = parseFloat($('inp-dto')?.value    || '0') || 0;
   S.items.push({
     skuId:         parseInt($('hid-sku-id').value,10),
     ean:           $('hid-sku-ean').value,
@@ -1349,8 +1377,8 @@ function añadirItem() {
     quantity:      quantityFinal,
     batchRef:      lote,
     expDate:       vence,
-    costPerUnit:   0,
-    discount:      0,
+    costPerUnit,
+    discount,
     labelComercial: formatQuantity(quantityFinal, { unit_of_measure: ub, pack_size: ps2 }),
   });
   renderItemsTable(); cerrarConv();
@@ -1367,7 +1395,7 @@ function renderItemsTable() {
   tbody.innerHTML='';
   S.items.forEach((it,idx)=>{
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td><p class="font-medium text-ink-900">${esc(it.nombre)}</p><p class="text-xs text-ink-400 font-mono mt-0.5">${esc(it.labelComercial)}</p></td><td class="text-right font-mono font-semibold text-ink-900">${formatQuantity(it.quantity, {unit_of_measure:it.unidadBase, pack_size:it.packSize||1})}</td><td class="font-mono text-xs text-ink-600">${esc(it.batchRef)}</td><td class="text-ink-600">${fmtDate(it.expDate)}</td><td><button class="del-item text-ink-400 hover:text-danger transition-colors p-1" data-idx="${idx}"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button></td>`;
+    tr.innerHTML=`<td><p class="font-medium text-ink-900">${esc(it.nombre)}</p><p class="text-xs text-ink-400 font-mono mt-0.5">${esc(it.labelComercial)}</p></td><td class="text-right font-mono font-semibold text-ink-900">${formatQuantity(it.quantity, {unit_of_measure:it.unidadBase, pack_size:it.packSize||1})}</td><td class="text-right font-mono text-xs text-ink-700">${it.costPerUnit > 0 ? it.costPerUnit.toFixed(2)+' €' : '—'}</td><td class="text-right font-mono text-xs text-ink-700">${it.discount > 0 ? it.discount.toFixed(2)+'%' : '—'}</td><td class="font-mono text-xs text-ink-600">${esc(it.batchRef)}</td><td class="text-ink-600">${fmtDate(it.expDate)}</td><td><button class="del-item text-ink-400 hover:text-danger transition-colors p-1" data-idx="${idx}"><svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/></svg></button></td>`;
     tbody.appendChild(tr);
   });
   tbody.querySelectorAll('.del-item').forEach(b=>b.addEventListener('click',()=>{
@@ -1422,7 +1450,7 @@ function initStep4() {
           item_id:         item.skuId,
           item_type:       'sku',
           expiration_date: item.expDate,
-          cost_per_unit:   parseFloat(item.costPerUnit ?? 0),
+          cost_per_unit:   item.costPerUnit ?? 0,
         });
         const batchId = batchRes.data?.batch?.id
           ?? batchRes.data?.id
