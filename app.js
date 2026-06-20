@@ -88,9 +88,7 @@ const Api = {
   skus:               (q='',l=500)  => Api._call('GET',  { action:'skus', limit:l, offset:0, ...(q?{q}:{}) }),
   locations:          ()            => Api._call('GET',  { action:'locations' }),
   /** Crear cabecera del albarán en /purchasing/orders */
-  purchasingOrder:    (b)           => Api._call('POST', { action:'purchasing_order'  }, b),
   /** Añadir línea al albarán en /purchasing/orders/{id}/details */
-  purchasingOrderLine:(b)           => Api._call('POST', { action:'purchasing_order_line' }, b),
   /**
    * Recepción física con batch inline (una sola llamada).
    * body.batch = { batch_reference, expiration_date, cost_per_unit? }
@@ -98,13 +96,20 @@ const Api = {
    */
   receive:            (b)           => Api._call('POST', { action:'receive' }, b),
   ocrAlbaran:         (img)         => Api._call('POST', { action:'ocr_albaran' }, { image_b64:img }),
-  // ── Proveedores (catalog/suppliers) ──────────────────
+  // ── Proveedores (/purchasing/suppliers) ─────────────
   suppliers:          (q='', isStd=null) => Api._call('GET',  { action:'suppliers', ...(q?{q}:{}), ...(isStd!==null?{is_standardized:isStd}:{}) }),
   createSupplier:     (b)           => Api._call('POST', { action:'suppliers' }, b),
   updateSupplier:     (id, b)       => Api._call('PUT',  { action:'suppliers', id }, b),
   deleteSupplier:     (id)          => Api._call('DELETE',{ action:'suppliers', id }),
-  supplierItems:      (supplierId)  => Api._call('GET',  { action:'supplier_items', supplier_id:supplierId }),
-  supplierPrices:     (supplierId)  => Api._call('GET',  { action:'supplier_prices', supplier_id:supplierId }),
+  // ── Órdenes de compra (/purchasing/orders) ───────────
+  // Crear con details[] inline (supplier_id + líneas en una sola llamada)
+  purchasingOrder:    (b)           => Api._call('POST', { action:'purchasing_order' }, b),
+  approvePurchasingOrder: (orderId) => Api._call('POST', { action:'purchasing_order' }, { _action:'approve', order_id:orderId }),
+  receivePurchasingOrder: (orderId, details) => Api._call('POST', { action:'purchasing_order' }, { _action:'receive', order_id:orderId, details }),
+  getPurchasingOrders:(params={})   => Api._call('GET',  { action:'purchasing_order', ...params }),
+  // ── Facturas (/purchasing/invoices) ──────────────────
+  createInvoice:      (b)           => Api._call('POST', { action:'invoices' }, b),
+  reconcileInvoice:   (id)          => Api._call('POST', { action:'invoices' }, { _action:'reconcile', invoice_id:id }),
   /** RBAC de pantallas: determina qué secciones puede ver el usuario en [1002] */
   rbacScreens:        (subsystem=1002) => Api._call('GET', { action:'rbac_screens', subsystem }),
 };
@@ -746,30 +751,28 @@ function initStep4() {
     errEl.classList.add('hidden');
 
     try {
-      // ── PASO A: Crear cabecera del albarán (/purchasing/orders)
+      // ── PASO A: Crear orden de compra con todas las líneas inline
+      // POST /purchasing/orders { supplier_id, details:[{supplier_item_id, quantity_requested, unit_price}] }
+      // Nota: supplier_item_id = SKU id del catálogo; si no existe en supplier-items se pasa item_id
       const orderRes = await Api.purchasingOrder({
-        supplier_id:       S.proveedorId,
-        interlocutor_id:   S.interlocutorId,
-        reference:         S.numAlbaran,
-        expected_delivery: null,
+        supplier_id: S.proveedorId,
+        details: S.items.map(item => ({
+          supplier_item_id:    item.skuId,
+          quantity_requested:  item.quantity,
+          unit_price:          0,
+        })),
+        notes: S.numAlbaran,
       });
       const orderId = orderRes.data?.order?.id ?? orderRes.data?.id;
       S.purchaseOrderId = orderId;
 
-      // ── PASO B: Añadir líneas + recepción física por cada ítem
-      for (const item of S.items) {
-        // Línea de la orden de compra
-        if (orderId) {
-          await Api.purchasingOrderLine({
-            order_id:         orderId,
-            item_id:          item.skuId,
-            item_type:        'sku',
-            quantity_ordered: item.quantity,
-            unit_price:       0,
-          }).catch(()=>{}); // no crítico si falla
-        }
+      // ── PASO B: Aprobar la orden
+      if (orderId) {
+        await Api.approvePurchasingOrder(orderId).catch(() => {});
+      }
 
-        // ── PASO C: Recepción física con batch inline (UNA sola llamada, v6.6.0)
+      // ── PASO C: Recepción física en almacén por cada ítem (batch inline)
+      for (const item of S.items) {
         await Api.receive({
           location_id:        S.bodegaId || 1,
           item_id:            item.skuId,
