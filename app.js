@@ -253,8 +253,6 @@ function goStep(n) {
    7. LOGIN — con interlocutor_id real de la sede elegida
 ══════════════════════════════════════════════════════ */
 function initLoginView() {
-  // {once:true} garantiza que cada listener se registra una sola vez aunque
-  // initLoginView() se llame varias veces durante el ciclo de vida de la app
   $('btn-toggle-pass').addEventListener('click', () => {
     const i = $('inp-password');
     i.type = i.type === 'password' ? 'text' : 'password';
@@ -515,7 +513,7 @@ function parseOcrQuantity(cantStr, sku) {
   const num = parseFloat(match[1]);
   if (isNaN(num) || num <= 0) return null;
 
-  const ub    = (sku?.unit_of_measure || 'ud').toLowerCase();
+  const ub    = (sku?.unit_of_measure || typeof sku === 'string' ? (sku || 'ud') : 'ud').toLowerCase();
   const lower = str.toLowerCase();
 
   // SKU en UNIDADES FÍSICAS — devolver el número sin conversión
@@ -728,10 +726,7 @@ function _bindOcrCardListeners() {
   });
 
   container.querySelectorAll('.ocr-buscar-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      // El botón vive fuera de #ean-wrap: si el click burbujea hasta document,
-      // el listener "click fuera de ean-wrap" cierra el dropdown que acabamos de abrir.
-      e.stopPropagation();
+    btn.addEventListener('click', () => {
       const desc = btn.dataset.desc || '';
       // Buscar en el catálogo y mostrar dropdown
       $('input-ean').value = desc.split(' ').slice(0,4).join(' ');
@@ -1413,39 +1408,30 @@ function initStep4() {
     errEl.classList.add('hidden');
 
     try {
-      // ── PASO A: Crear orden de compra con todas las líneas inline
-      // POST /purchasing/orders { supplier_id, details:[{supplier_item_id, item_type, quantity_requested, unit_price}] }
-      // supplier_item_id = SKU id del catálogo general (products_sku) — item_type:'sku' lo distingue
-      // de supplier_items (referencia polimórfica, igual patrón que inventory_stock/batches)
-      const orderRes = await Api.purchasingOrder({
-        supplier_id: S.proveedorId,
-        details: S.items.map(item => ({
-          supplier_item_id:    item.skuId,
-          item_type:           'sku',
-          quantity_requested:  item.quantity,
-          unit_price:          0,
-        })),
-        notes: S.numAlbaran,
-      });
-      const orderId = orderRes.data?.order?.id ?? orderRes.data?.id;
-      S.purchaseOrderId = orderId;
+      // Flujo según Postman v6:
+      // 1. POST /inventory/batches  → crear lote → batch_id
+      // 2. POST /inventory/reception con batch_id → registrar stock
 
-      // ── PASO B: Aprobar la orden
-      if (orderId) {
-        await Api.approvePurchasingOrder(orderId).catch(() => {});
-      }
-
-      // ── PASO C: Recepción física en almacén por cada ítem (batch inline)
       for (const item of S.items) {
+        // ── PASO 1: Crear el lote (FEFO)
+        const batchRes = await Api._call('POST', { action:'batch' }, {
+          batch_reference: item.batchRef,
+          item_id:         item.skuId,
+          item_type:       'sku',
+          expiration_date: item.expDate,
+          cost_per_unit:   0,
+        });
+        const batchId = batchRes.data?.batch?.id
+          ?? batchRes.data?.id
+          ?? batchRes.data?.batch_id;
+        if (!batchId) throw { error: `No se obtuvo batch_id para "${item.nombre}".` };
+
+        // ── PASO 2: Registrar recepción con el batch_id obtenido
         await Api.receive({
           location_id:        S.bodegaId || 1,
+          batch_id:           batchId,
           item_id:            item.skuId,
           item_type:          'sku',
-          batch: {
-            batch_reference: item.batchRef,
-            expiration_date: item.expDate,
-            cost_per_unit:   0,
-          },
           quantity:           item.quantity,
           movement_type:      'Compra',
           reference_document: S.numAlbaran,
@@ -1498,7 +1484,7 @@ function _logout() {
 /* ══════════════════════════════════════════════════════
    14. BOOTSTRAP
 ══════════════════════════════════════════════════════ */
-function _bootstrap() {
+document.addEventListener('DOMContentLoaded', () => {
   $('btn-logout').addEventListener('click', _logout);
   $('btn-nuevo').addEventListener('click',  resetFormulario);
   initSedeView();
@@ -1519,14 +1505,6 @@ function _bootstrap() {
     });
   } else {
     showView('view-login');
+    return;
   }
-}
-
-// app.js se inyecta dinámicamente (cache-busting) y puede terminar de cargar
-// DESPUÉS de que DOMContentLoaded ya haya disparado — comprobar readyState
-// en vez de depender ciegamente del evento, o el bootstrap nunca se ejecuta.
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', _bootstrap);
-} else {
-  _bootstrap();
-}
+});

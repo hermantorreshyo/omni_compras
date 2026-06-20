@@ -67,6 +67,12 @@ function apiCall(string $method, string $path, ?array $payload, string $token, i
         return ['ok'=>false,'status'=>0,'error'=>'cURL: '.$err,'raw'=>[],'omni_code'=>'ERR_NETWORK'];
     $data = json_decode($raw, true);
     $isOk = $status >= 200 && $status < 300 && is_array($data) && ($data['status'] ?? '') === 'success';
+    // DEBUG temporal — registra en error_log de Apache
+    if (!$isOk) {
+        error_log('[1002-DEBUG] ' . strtoupper($method) . ' ' . $url);
+        error_log('[1002-DEBUG] payload: ' . json_encode($payload ?? [], JSON_UNESCAPED_UNICODE));
+        error_log('[1002-DEBUG] response HTTP ' . $status . ': ' . substr($raw ?? '', 0, 500));
+    }
     return ['ok'=>$isOk,'status'=>$status,'raw'=>is_array($data)?$data:[],'omni_code'=>is_array($data)?($data['error_code']??null):null];
 }
 function rowsOf(array $res): array {
@@ -340,6 +346,24 @@ switch ($action) {
     //  Con batch inline (crea lote y registra en una llamada)
     //  Se usa tras confirmar el albarán en purchasing/orders
     // ══════════════════════════════════════════════════════
+    case 'batch':
+        if ($method !== 'POST') fail('Solo POST.', 405);
+        if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
+        $b = body();
+        if (empty($b['batch_reference'])) fail('batch_reference es obligatorio.', 400, 'ERR_VALIDATION');
+        if (empty($b['item_id']))         fail('item_id es obligatorio.', 400, 'ERR_VALIDATION');
+        if (empty($b['expiration_date'])) fail('expiration_date es obligatorio.', 400, 'ERR_VALIDATION');
+        $res = apiCall('POST', '/inventory/batches', [
+            'batch_reference' => $b['batch_reference'],
+            'item_id'         => (int)$b['item_id'],
+            'item_type'       => $b['item_type'] ?? 'sku',
+            'expiration_date' => $b['expiration_date'],
+            'cost_per_unit'   => (float)($b['cost_per_unit'] ?? 0),
+        ], $token, $iid);
+        if (!$res['ok']) fail(omniError($res, 'Error al crear lote.'), $res['status'] ?: 422, $res['omni_code'] ?? 'ERR_VALIDATION');
+        ok(['batch' => $res['raw']['data'] ?? $res['raw']]);
+        break;
+
     case 'receive':
         if ($method !== 'POST') fail('Solo POST.', 405);
         if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
@@ -355,16 +379,10 @@ switch ($action) {
             'movement_type'      => $b['movement_type'] ?? 'Compra',
             'reference_document' => $b['reference_document'],
         ];
-        if (!empty($b['batch']) && is_array($b['batch'])) {
-            $p['batch'] = [
-                'batch_reference' => $b['batch']['batch_reference'],
-                'expiration_date' => $b['batch']['expiration_date'],
-                'cost_per_unit'   => (float)($b['batch']['cost_per_unit'] ?? 0),
-            ];
-        } elseif (!empty($b['batch_id'])) {
+        if (!empty($b['batch_id'])) {
             $p['batch_id'] = (int)$b['batch_id'];
         } else {
-            fail('Se requiere batch{batch_reference,expiration_date} o batch_id.', 400, 'ERR_VALIDATION');
+            fail('batch_id es obligatorio. Crear primero el lote con action=batch.', 400, 'ERR_VALIDATION');
         }
         $res = apiCall('POST', '/inventory/reception', $p, $token, $iid);
         if (!$res['ok']) fail(omniError($res, 'Error al registrar recepción.'), $res['status'] ?: 422, $res['omni_code'] ?? 'ERR_KARDEX');
