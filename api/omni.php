@@ -326,13 +326,17 @@ switch ($action) {
                 ok(['order' => $res['raw']['data'] ?? $res['raw']]);
 
             } else {
-                // POST /purchasing/orders — crear con details inline
+                // POST /purchasing/orders — §21 Manual v6.6.0
+                // details[]: supplier_item_name + item_id + item_type + unit_of_measure
+                //            + quantity_requested + unit_price
+                // El API reutiliza o crea el supplier_item e inserta la línea.
                 if (empty($b['supplier_id'])) fail('supplier_id es obligatorio.', 400, 'ERR_VALIDATION');
                 $payload = [
                     'supplier_id' => (int)$b['supplier_id'],
                     'details'     => $b['details'] ?? [],
                 ];
-                if (!empty($b['notes'])) $payload['notes'] = $b['notes'];
+                if (!empty($b['reference'])) $payload['reference'] = $b['reference'];
+                if (!empty($b['notes']))     $payload['notes']     = $b['notes'];
                 $res = apiCall('POST', '/purchasing/orders', $payload, $token, $iid);
                 if (!$res['ok']) fail(omniError($res, 'Error al crear albarán.'), $res['status'] ?: 422, $res['omni_code'] ?? 'ERR_VALIDATION');
                 ok(['order' => $res['raw']['data'] ?? $res['raw']]);
@@ -346,6 +350,22 @@ switch ($action) {
     //  Con batch inline (crea lote y registra en una llamada)
     //  Se usa tras confirmar el albarán en purchasing/orders
     // ══════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════
+    //  MATCH DE ARTÍCULO — §21 Manual v6.6.0
+    //  GET /inventory/reception/match?name=BRAUNGEL...&supplier_id=1
+    //  Devuelve supplier_item_id si ya existe en el historial del proveedor
+    // ══════════════════════════════════════════════════════
+    case 'reception_match':
+        if ($method !== 'GET') fail('Solo GET.', 405);
+        if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
+        $p = [];
+        if (!empty($_GET['name']))        $p['name']        = $_GET['name'];
+        if (!empty($_GET['supplier_id'])) $p['supplier_id'] = (int)$_GET['supplier_id'];
+        $res = apiCall('GET', '/inventory/reception/match?' . http_build_query($p), null, $token, $iid);
+        if (!$res['ok']) fail(omniError($res, 'Error al buscar match.'), $res['status'] ?: 502, $res['omni_code'] ?? 'ERR_INTERNAL');
+        ok(['matches' => $res['raw']['data']['matches'] ?? $res['raw']['data'] ?? []]);
+        break;
+
     case 'batch':
         if ($method !== 'POST') fail('Solo POST.', 405);
         if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');

@@ -1439,21 +1439,22 @@ function initStep4() {
     errEl.classList.add('hidden');
 
     try {
-      // ── PASO A: Crear orden de compra con detalles y total
-      // POST /purchasing/orders con details[] inline
-      // supplier_item_id = skuId (el API CORE mapea internamente)
-      // unit_price = costPerUnit del albarán
-      const totalOrden = S.items.reduce((acc, it) =>
-        acc + (it.quantity * (it.costPerUnit ?? 0)), 0
-      );
+      // ── PASO A: Crear orden de compra — §21 Manual v6.6.0
+      // Usar supplier_item_name + item_id + item_type en cada detalle.
+      // El API busca si ya existe el artículo para el proveedor,
+      // lo reutiliza o lo crea, e inserta la línea con supplier_item_id.
+      // Campo "reference" = número del albarán físico.
 
       const orderRes = await Api.purchasingOrder({
         supplier_id: S.proveedorId,
-        notes:       S.numAlbaran,
+        reference:   S.numAlbaran,
         details: S.items.map(item => ({
-          supplier_item_id:    item.skuId,
-          quantity_requested:  item.quantity,
-          unit_price:          item.costPerUnit ?? 0,
+          supplier_item_name: item.nombre,       // nombre del artículo como viene en el albarán
+          item_id:            item.skuId,        // ID del SKU en OMNI
+          item_type:          'sku',
+          unit_of_measure:    item.unidadBase,
+          quantity_requested: item.quantity,
+          unit_price:         item.costPerUnit ?? 0,
         })),
       });
       const orderId = orderRes.data?.order?.id ?? orderRes.data?.id;
