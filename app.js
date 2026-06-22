@@ -334,8 +334,10 @@ function initSedeView() {
       S._pendingUsername = null;
       S._pendingPassword = null;
 
-      $('hdr-nombre').textContent = d.username ?? S.user?.username ?? '—';
-      $('hdr-sede').textContent   = S.sedeName;
+      $('hdr-nombre').textContent         = d.username ?? S.user?.username ?? '—';
+      $('hdr-sede').textContent            = S.sedeName;
+      if ($('hdr-nombre-mobile')) $('hdr-nombre-mobile').textContent = d.username ?? S.user?.username ?? '—';
+      if ($('hdr-sede-m'))        $('hdr-sede-m').textContent        = S.sedeName;
       $('lbl-fecha').textContent  = new Date().toLocaleString('es-ES',{
         day:'2-digit', month:'2-digit', year:'numeric',
         hour:'2-digit', minute:'2-digit'
@@ -1615,8 +1617,10 @@ document.addEventListener('DOMContentLoaded', () => {
     S.interlocutorId=Api._iid; S.sedePrincipalId=Api._iid;
     try {
       const pay=JSON.parse(atob(Api._token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
-      $('hdr-nombre').textContent = pay.username||pay.nombre||'—';
-      $('hdr-sede').textContent   = pay.interlocutor_name||pay.sede||`Sede ${S.interlocutorId}`;
+      $('hdr-nombre').textContent         = pay.username||pay.nombre||'—';
+      $('hdr-sede').textContent            = pay.interlocutor_name||pay.sede||`Sede ${S.interlocutorId}`;
+      if ($('hdr-nombre-mobile')) $('hdr-nombre-mobile').textContent = pay.username||pay.nombre||'—';
+      if ($('hdr-sede-m'))        $('hdr-sede-m').textContent        = pay.interlocutor_name||pay.sede||`Sede ${S.interlocutorId}`;
     } catch(_) {}
     cargarCatalogos().then(()=>{
       showView('view-app'); goStep(1);
