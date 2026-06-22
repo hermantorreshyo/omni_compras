@@ -253,53 +253,94 @@
       </div>
     </div>
 
-    <!-- ── PASO 1: Captura del documento ── -->
+    <!-- ── PASO 1: Modo de entrada ── -->
     <div id="step-1" class="bg-white rounded-2xl border border-ink-200 overflow-hidden">
       <div class="px-6 py-5 border-b border-ink-100">
-        <h2 class="text-base font-semibold text-ink-900">Adjuntar albarán físico</h2>
-        <p class="text-sm text-ink-500 mt-0.5">Fotografía o archivo del documento del proveedor</p>
+        <h2 class="text-base font-semibold text-ink-900">¿Cómo quieres registrar el albarán?</h2>
+        <p class="text-sm text-ink-500 mt-0.5">Elige el método de entrada de datos</p>
       </div>
       <div class="p-6 space-y-4">
-        <!-- Drop zone -->
-        <label id="drop-zone"
-          class="flex flex-col items-center justify-center gap-3 min-h-[160px]
-                 border-2 border-dashed border-ink-300 rounded-xl cursor-pointer
-                 hover:border-brand hover:bg-brand/5 transition-colors text-center p-6">
-          <div id="dz-idle">
-            <div class="w-12 h-12 rounded-full bg-ink-100 flex items-center justify-center mx-auto mb-3">
-              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#64748b" stroke-width="1.5">
+
+        <!-- Selector de modo -->
+        <div id="modo-selector" class="grid grid-cols-2 gap-4">
+          <!-- Opción A: Imagen/OCR -->
+          <button id="btn-modo-imagen"
+            class="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-brand
+                   bg-brand/5 text-left transition-all hover:border-brand group">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center"
+              style="background:#642a72">
+              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="1.5">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"/>
                 <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z"/>
               </svg>
             </div>
-            <p class="text-sm font-medium text-ink-700">Toca o arrastra el documento aquí</p>
-            <p class="text-xs text-ink-400 mt-1">Foto de cámara · PDF · PNG · JPG</p>
-          </div>
-          <div id="dz-preview" class="hidden w-full">
-            <img id="prev-img" class="hidden max-h-48 mx-auto rounded-lg object-contain" alt="" />
-            <div id="prev-pdf" class="hidden flex items-center gap-3 justify-center">
-              <svg width="32" height="32" fill="#ef4444" viewBox="0 0 24 24">
-                <path d="M7 18H17V16H7v2zm10-8H7v2h10v-2zm-4-6H5c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H19c1.1 0 2-.9 2-2V8l-6-6zm4 18H5V4h7v5h5v13z"/>
+            <div>
+              <p class="text-sm font-bold text-ink-900">Fotografiar albarán</p>
+              <p class="text-xs text-ink-500 mt-0.5 leading-snug">
+                El sistema extrae los datos automáticamente con IA
+              </p>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+              style="background:#642a72;color:white">RECOMENDADO</span>
+          </button>
+
+          <!-- Opción B: Manual -->
+          <button id="btn-modo-manual"
+            class="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-ink-200
+                   text-left transition-all hover:border-brand hover:bg-ink-50 group">
+            <div class="w-12 h-12 rounded-xl bg-ink-100 flex items-center justify-center">
+              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#64748b" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"/>
               </svg>
-              <div class="text-left">
-                <p id="prev-nom" class="text-sm font-medium text-ink-800">documento.pdf</p>
-                <p class="text-xs text-ink-500">PDF adjunto correctamente</p>
+            </div>
+            <div>
+              <p class="text-sm font-bold text-ink-900">Ingresar manualmente</p>
+              <p class="text-xs text-ink-500 mt-0.5 leading-snug">
+                Introduce los datos del proveedor y productos uno a uno
+              </p>
+            </div>
+          </button>
+        </div>
+
+        <!-- Panel imagen (visible solo en modo imagen) -->
+        <div id="panel-modo-imagen" class="space-y-4">
+          <label id="drop-zone"
+            class="flex flex-col items-center justify-center gap-3 min-h-[160px]
+                   border-2 border-dashed border-ink-300 rounded-xl cursor-pointer
+                   hover:border-brand hover:bg-brand/5 transition-colors text-center p-6">
+            <div id="dz-idle">
+              <div class="w-12 h-12 rounded-full bg-ink-100 flex items-center justify-center mx-auto mb-3">
+                <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#64748b" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/>
+                </svg>
+              </div>
+              <p class="text-sm font-medium text-ink-700">Toca o arrastra el documento aquí</p>
+              <p class="text-xs text-ink-400 mt-1">Foto de cámara · PDF · PNG · JPG</p>
+            </div>
+            <div id="dz-preview" class="hidden w-full">
+              <img id="prev-img" class="hidden max-h-48 mx-auto rounded-lg object-contain" alt="" />
+              <div id="prev-pdf" class="hidden flex items-center gap-3 justify-center">
+                <svg width="32" height="32" fill="#ef4444" viewBox="0 0 24 24">
+                  <path d="M7 18H17V16H7v2zm10-8H7v2h10v-2zm-4-6H5c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H19c1.1 0 2-.9 2-2V8l-6-6zm4 18H5V4h7v5h5v13z"/>
+                </svg>
+                <div class="text-left">
+                  <p id="prev-nom" class="text-sm font-medium text-ink-800">documento.pdf</p>
+                  <p class="text-xs text-ink-500">PDF adjunto correctamente</p>
+                </div>
               </div>
             </div>
-          </div>
-          <input id="file-input" type="file" accept="image/*,application/pdf" capture="environment" class="hidden" />
-        </label>
-
-        <!-- Panel OCR -->
-        <div id="ocr-panel" class="hidden"></div>
-
-        <!-- Botones -->
-        <div class="flex items-center justify-between gap-3">
+            <input id="file-input" type="file" accept="image/*,application/pdf" capture="environment" class="hidden" />
+          </label>
+          <div id="ocr-panel" class="hidden"></div>
           <button id="btn-clear-doc" class="hidden text-sm text-danger hover:underline">
             Eliminar documento
           </button>
+        </div>
+
+        <!-- Botón continuar -->
+        <div class="flex justify-end pt-1">
           <button id="btn-step1-next" disabled
-            class="ml-auto flex items-center gap-2 bg-brand hover:bg-brand-light disabled:opacity-40
+            class="flex items-center gap-2 bg-brand hover:bg-brand-light disabled:opacity-40
                    disabled:cursor-not-allowed text-white font-medium text-sm py-2.5 px-5 rounded-lg transition-colors">
             Continuar
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

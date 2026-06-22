@@ -122,6 +122,7 @@ const S = {
   // Sesión
   user: null, interlocutorId: Api._iid, sedePrincipalId: 0,
   _pendingUsername: null, _pendingPassword: null,
+  modoEntrada: 'imagen', // 'imagen' | 'manual'
   sedeName: '', role: '', permissions: [],
 
   // Catálogos
@@ -817,23 +818,52 @@ function matchProveedor(ocrProv) {
    9. PASO 1 — Documento + OCR
 ══════════════════════════════════════════════════════ */
 function initStep1() {
-  const fi=$('file-input'), dz=$('drop-zone'), btn=$('btn-step1-next');
-  fi.addEventListener('change',  e => { const f=e.target.files?.[0]; if(f) cargarDoc(f); });
-  dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('border-brand','bg-brand/5'); });
-  dz.addEventListener('dragleave', () => dz.classList.remove('border-brand','bg-brand/5'));
-  dz.addEventListener('drop', e => {
-    e.preventDefault(); dz.classList.remove('border-brand','bg-brand/5');
-    const f=e.dataTransfer?.files?.[0]; if(f) cargarDoc(f);
+  const fi  = $('file-input');
+  const dz  = $('drop-zone');
+  const btn = $('btn-step1-next');
+
+  // ── Selector de modo ────────────────────────────────
+  $('btn-modo-imagen')?.addEventListener('click', () => {
+    S.modoEntrada = 'imagen';
+    $('btn-modo-imagen').style.cssText = 'border-color:#642a72;background:rgba(100,42,114,0.05)';
+    $('btn-modo-manual').style.cssText = 'border-color:#e2e8f0;background:';
+    $('panel-modo-imagen').style.display = '';
+    btn.disabled = !S.docB64;
   });
-  $('btn-clear-doc').addEventListener('click', () => {
-    S.docB64=null; S.docNombre=null; S.ocrData=null;
-    fi.value=''; btn.disabled=true;
-    $('dz-idle').classList.remove('hidden'); $('dz-preview').classList.add('hidden');
+
+  $('btn-modo-manual')?.addEventListener('click', () => {
+    S.modoEntrada = 'manual';
+    $('btn-modo-manual').style.cssText = 'border-color:#642a72;background:rgba(100,42,114,0.05)';
+    $('btn-modo-imagen').style.cssText = 'border-color:#e2e8f0;background:';
+    $('panel-modo-imagen').style.display = 'none';
+    btn.disabled = false;
+  });
+
+  // ── Zona drop (modo imagen) ─────────────────────────
+  if (fi) fi.addEventListener('change', e => {
+    const f = e.target.files?.[0]; if (f) cargarDoc(f);
+  });
+  if (dz) {
+    dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('border-brand'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('border-brand'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault(); dz.classList.remove('border-brand');
+      const f = e.dataTransfer?.files?.[0]; if (f) cargarDoc(f);
+    });
+  }
+
+  $('btn-clear-doc')?.addEventListener('click', () => {
+    S.docB64 = null; S.docNombre = null; S.ocrData = null;
+    if (fi) fi.value = '';
+    btn.disabled = true;
+    $('dz-idle').classList.remove('hidden');
+    $('dz-preview').classList.add('hidden');
     $('btn-clear-doc').classList.add('hidden');
     $('ocr-panel').classList.add('hidden');
-  $('ocr-lineas-panel')?.classList.add('hidden');
-  if ($('ocr-lineas-body')) $('ocr-lineas-body').innerHTML = '';
+    $('ocr-lineas-panel')?.classList.add('hidden');
+    if ($('ocr-lineas-body')) $('ocr-lineas-body').innerHTML = '';
   });
+
   btn.addEventListener('click', () => goStep(2));
 }
 
@@ -961,11 +991,15 @@ function initStep2() {
     S.bodegaId     = parseInt($('sel-ubicacion').value||'0',10);
     S.bodegaNom    = $('sel-ubicacion').selectedOptions[0]?.text??'Sin asignar';
     goStep(3);
-    // Auto-procesar líneas del OCR: match con SKUs del catálogo
-    if (S.ocrData?.lineas?.length > 0) {
+    if (S.modoEntrada === 'manual') {
+      // Modo manual: ocultar panel OCR, ir directo al escáner
+      $('ocr-lineas-panel')?.classList.add('hidden');
+      setTimeout(() => $('input-ean')?.focus(), 200);
+    } else if (S.ocrData?.lineas?.length > 0) {
+      // Modo imagen: auto-match de líneas OCR
       setTimeout(() => _procesarLineasOcr(S.ocrData.lineas), 300);
     } else {
-      setTimeout(()=>$('input-ean')?.focus(),200);
+      setTimeout(() => $('input-ean')?.focus(), 200);
     }
   });
   $('btn-modal-prov-cancel').addEventListener('click', cerrarModalProveedor);
