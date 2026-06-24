@@ -67,12 +67,6 @@ function apiCall(string $method, string $path, ?array $payload, string $token, i
         return ['ok'=>false,'status'=>0,'error'=>'cURL: '.$err,'raw'=>[],'omni_code'=>'ERR_NETWORK'];
     $data = json_decode($raw, true);
     $isOk = $status >= 200 && $status < 300 && is_array($data) && ($data['status'] ?? '') === 'success';
-    // DEBUG temporal — registra en error_log de Apache
-    if (!$isOk) {
-        error_log('[1002-DEBUG] ' . strtoupper($method) . ' ' . $url);
-        error_log('[1002-DEBUG] payload: ' . json_encode($payload ?? [], JSON_UNESCAPED_UNICODE));
-        error_log('[1002-DEBUG] response HTTP ' . $status . ': ' . substr($raw ?? '', 0, 500));
-    }
     return ['ok'=>$isOk,'status'=>$status,'raw'=>is_array($data)?$data:[],'omni_code'=>is_array($data)?($data['error_code']??null):null];
 }
 function rowsOf(array $res): array {
@@ -373,13 +367,14 @@ switch ($action) {
         if (empty($b['batch_reference'])) fail('batch_reference es obligatorio.', 400, 'ERR_VALIDATION');
         if (empty($b['item_id']))         fail('item_id es obligatorio.', 400, 'ERR_VALIDATION');
         if (empty($b['expiration_date'])) fail('expiration_date es obligatorio.', 400, 'ERR_VALIDATION');
-        $res = apiCall('POST', '/inventory/batches', [
+        $batchPayload = [
             'batch_reference' => $b['batch_reference'],
             'item_id'         => (int)$b['item_id'],
             'item_type'       => $b['item_type'] ?? 'sku',
             'expiration_date' => $b['expiration_date'],
             'cost_per_unit'   => (float)($b['cost_per_unit'] ?? 0),
-        ], $token, $iid);
+        ];
+        $res = apiCall('POST', '/inventory/batches', $batchPayload, $token, $iid);
         if (!$res['ok']) fail(omniError($res, 'Error al crear lote.'), $res['status'] ?: 422, $res['omni_code'] ?? 'ERR_VALIDATION');
         ok(['batch' => $res['raw']['data'] ?? $res['raw']]);
         break;

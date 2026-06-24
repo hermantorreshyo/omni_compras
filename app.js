@@ -52,12 +52,22 @@ const Api = {
    * a { ok:bool, data:{}, error:string|null, code:string|null }.
    */
   parseResponse(raw) {
-    return {
+    const r = {
       ok:    raw.ok === true,
       data:  raw.data   ?? null,
       error: raw.error  ?? null,
       code:  raw.code   ?? null,
     };
+    // Token expirado → limpiar sesión y volver al login
+    if (!r.ok && (r.code === 'ERR_AUTH' || r.code === 'ERR_UNAUTHORIZED' ||
+        (r.error || '').toLowerCase().includes('expirado'))) {
+      Api.clearSession();
+      if (typeof showView === 'function') {
+        toast('Tu sesión ha expirado. Por favor, inicia sesión de nuevo.', 'warn');
+        setTimeout(() => showView('view-login'), 1500);
+      }
+    }
+    return r;
   },
 
   async _call(method, params, body) {
@@ -1475,33 +1485,12 @@ function initStep4() {
     errEl.classList.add('hidden');
 
     try {
-      // ── PASO A: Crear orden de compra — §21 Manual v6.6.0
-      // Usar supplier_item_name + item_id + item_type en cada detalle.
-      // El API busca si ya existe el artículo para el proveedor,
-      // lo reutiliza o lo crea, e inserta la línea con supplier_item_id.
-      // Campo "reference" = número del albarán físico.
-
-      const orderRes = await Api.purchasingOrder({
-        supplier_id: S.proveedorId,
-        reference:   S.numAlbaran,
-        details: S.items.map(item => ({
-          supplier_item_name: item.nombre,       // nombre del artículo como viene en el albarán
-          item_id:            item.skuId,        // ID del SKU en OMNI
-          item_type:          'sku',
-          unit_of_measure:    item.unidadBase,
-          quantity_requested: item.quantity,
-          unit_price:         item.costPerUnit ?? 0,
-        })),
-      });
-      const orderId = orderRes.data?.order?.id ?? orderRes.data?.id;
-      S.purchaseOrderId = orderId;
-
-      // ── PASO B: Aprobar la orden
-      if (orderId) {
-        await Api.approvePurchasingOrder(orderId).catch(() => {});
-      }
-
-      // ── PASO C: Lote + Recepción física por cada ítem
+      // ── PASO A: Lote + Recepción física por cada ítem
+      // El endpoint POST /purchasing/orders requiere supplier_item_id
+      // que solo existe tras dar de alta artículos por proveedor —
+      // proceso que no está disponible en este subsistema.
+      // El registro de inventario (batch + reception) es suficiente
+      // para actualizar el kardex y el stock disponible.
       for (const item of S.items) {
         // Crear lote (FEFO)
         const batchRes = await Api._call('POST', { action:'batch' }, {
