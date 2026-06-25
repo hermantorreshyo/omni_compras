@@ -1826,11 +1826,24 @@ async function _cargarPermisos() {
       Api.rbacPermsGet().catch(() => ({ data: { permissions: {} } })),
     ]);
 
-    // Normalizar roles
+    // Roles conocidos del ecosistema JOSEPAN 360 como fallback
+    const ROLES_FALLBACK = [
+      'Jefe de Compras', 'Jefe de Almacen', 'Jefe de Producción',
+      'Gerente de Sede', 'Encargado de Tienda', 'Operario de Almacen',
+      'Operario de Producción', 'Camarero', 'Encargado de Caja',
+      'Encargado de Cocina', 'Encargado de Panaderia', 'Chofer Logístico',
+      'Auditor de Inventarios', 'Cocinero', 'Panadero', 'Pastelero',
+      'Administrativo', 'Office', 'Produccion',
+    ];
+
+    // Normalizar roles desde API
     const rawRoles = rolesRes.data?.roles ?? rolesRes.data ?? [];
-    _perms.roles = Array.isArray(rawRoles)
-      ? rawRoles.map(r => typeof r === 'string' ? r : (r.nombre || r.name || r.role || String(r)))
+    const apiRoles = Array.isArray(rawRoles)
+      ? rawRoles.map(r => typeof r === 'string' ? r : (r.nombre || r.name || r.role || String(r))).filter(Boolean)
       : [];
+
+    // Usar roles del API si llegaron, si no usar el fallback
+    _perms.roles = apiRoles.length > 0 ? apiRoles : ROLES_FALLBACK;
 
     // Normalizar mapa de permisos { screen_key: [roles] }
     const rawMap = mapaRes.data?.permissions ?? mapaRes.data ?? {};
