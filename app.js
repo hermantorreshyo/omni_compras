@@ -1868,13 +1868,13 @@ function _renderPermisos() {
     const asignados = _perms.map[screen.key] || [];
 
     const card = document.createElement('div');
-    card.className = 'bg-white rounded-2xl border border-ink-200 p-5';
+    card.style.cssText = 'background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;margin-bottom:16px';
     card.innerHTML = `
-      <div class="mb-3">
-        <p class="text-sm font-bold text-ink-900">${esc(screen.label)}</p>
-        <p class="text-xs text-ink-400 mt-0.5">${esc(screen.description)}</p>
+      <div style="margin-bottom:12px">
+        <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0">${esc(screen.label)}</p>
+        <p style="font-size:12px;color:#94a3b8;margin:4px 0 0">${esc(screen.description)}</p>
       </div>
-      <div class="flex flex-wrap gap-2" id="chips-${esc(screen.key)}"></div>`;
+      <div id="chips-${esc(screen.key)}" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px"></div>`;
     container.appendChild(card);
 
     // Renderizar chips de roles
@@ -1893,12 +1893,11 @@ function _renderPermisos() {
       chip.dataset.screen = screen.key;
       chip.dataset.rol    = rol;
       chip.dataset.activo = activo ? '1' : '0';
-      chip.style.cssText  = `
-        padding:5px 13px;border-radius:9999px;font-size:12px;font-weight:500;
-        cursor:pointer;border:1px solid;transition:all 0.15s;
-        ${activo
-          ? 'background:#642a72;color:#fff;border-color:#642a72'
-          : 'background:#fff;color:#64748b;border-color:#e2e8f0'}`;
+      chip.style.cssText = (activo
+        ? 'background:#642a72;color:#fff;border-color:#642a72;'
+        : 'background:#fff;color:#64748b;border-color:#e2e8f0;') +
+        'padding:4px 12px;border-radius:9999px;font-size:12px;font-weight:500;' +
+        'cursor:pointer;border:1px solid;white-space:nowrap;flex-shrink:0;';
       chip.textContent = rol;
 
       chip.addEventListener('click', () => {
