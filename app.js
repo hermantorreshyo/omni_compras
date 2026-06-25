@@ -363,9 +363,6 @@ function initSedeView() {
       await cargarCatalogos();
       await _cargarRbacScreens();
       showView('view-app'); goStep(1);
-      // Mostrar/ocultar opción de gestor de permisos según rol
-      const isSuper = (S.role || '').toLowerCase().includes('superadmin');
-      if ($('menu-btn-permisos')) $('menu-btn-permisos').style.display = isSuper ? '' : 'none';
 
     } catch(err) {
       const msg =
@@ -1623,6 +1620,12 @@ function initMenu() {
   let closeMenuFn = null;
   const openMenu  = () => {
     $('menu-hdr-usuario').textContent = S.user?.username ?? '—';
+    // Mostrar gestor de permisos solo para SuperAdmin
+    // S.role puede venir del JWT o del objeto user
+    const role = (S.role || S.user?.role || '').toLowerCase();
+    const isSuper = role.includes('superadmin');
+    const permBtn = $('menu-btn-permisos');
+    if (permBtn) permBtn.style.display = isSuper ? '' : 'none';
     dd.style.display = 'block';
     open = true;
   };
