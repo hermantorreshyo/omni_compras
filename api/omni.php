@@ -573,6 +573,7 @@ switch ($action) {
         if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
         if ($method === 'GET') {
             $res = apiCall('GET', '/rbac/subsystems/1002/screen-permissions', null, $token, $iid);
+            error_log('[1002-RBAC-GET] raw: ' . json_encode($res['raw'], JSON_UNESCAPED_UNICODE));
             if (!$res['ok']) fail(omniError($res,'Error al cargar permisos.'), $res['status']?:502);
             ok(['permissions' => $res['raw']['data'] ?? $res['raw']]);
         } elseif ($method === 'PUT') {
