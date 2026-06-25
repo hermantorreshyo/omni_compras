@@ -121,6 +121,8 @@ const Api = {
   // ── Facturas (/purchasing/invoices) ──────────────────
   createInvoice:      (b)           => Api._call('POST', { action:'invoices' }, b),
   reconcileInvoice:   (id)          => Api._call('POST', { action:'invoices' }, { _action:'reconcile', invoice_id:id }),
+  /** Historial de albaranes — GET /purchasing/orders */
+  historialOrders: (params={}) => Api._call('GET', { action:'purchasing_order', ...params }),
   /** RBAC de pantallas: determina qué secciones puede ver el usuario en [1002] */
   rbacScreens:        (subsystem=1002) => Api._call('GET', { action:'rbac_screens', subsystem }),
 };
@@ -1564,6 +1566,12 @@ function initStep4() {
       $('confirm-error-msg').textContent = msg;
     } finally {
       btn.disabled=false; label.textContent='Registrar albarán'; spin.classList.add('hidden');
+      // Conectar botón "Nuevo albarán desde error" (solo una vez)
+      const btnNuevoError = $('btn-nuevo-desde-error');
+      if (btnNuevoError && !btnNuevoError.dataset.bound) {
+        btnNuevoError.dataset.bound = '1';
+        btnNuevoError.addEventListener('click', () => { resetFormulario(); goStep(1); });
+      }
     }
   });
 }
@@ -1594,10 +1602,141 @@ function _logout() {
 /* ══════════════════════════════════════════════════════
    14. BOOTSTRAP
 ══════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════
+   MENÚ HAMBURGUESA
+══════════════════════════════════════════════════════ */
+function initMenu() {
+  const drawer  = $('menu-drawer');
+  const overlay = $('menu-overlay');
+  if (!drawer) return;
+
+  const open  = () => {
+    $('menu-hdr-usuario').textContent = S.user?.username ?? '—';
+    overlay.classList.remove('hidden');
+    drawer.style.transform = 'translateX(0)';
+  };
+  const close = () => {
+    overlay.classList.add('hidden');
+    drawer.style.transform = 'translateX(100%)';
+  };
+
+  $('btn-menu')?.addEventListener('click', open);
+  $('btn-menu-close')?.addEventListener('click', close);
+  overlay?.addEventListener('click', close);
+
+  $('menu-btn-inicio')?.addEventListener('click', () => {
+    close();
+    resetFormulario();
+    showView('view-app');
+    goStep(1);
+  });
+
+  $('menu-btn-historial')?.addEventListener('click', () => {
+    close();
+    _mostrarHistorial();
+  });
+
+  $('menu-btn-logout')?.addEventListener('click', () => {
+    close();
+    _logout();
+  });
+}
+
+/* ══════════════════════════════════════════════════════
+   HISTORIAL DE ALBARANES
+══════════════════════════════════════════════════════ */
+function _mostrarHistorial() {
+  // Mostrar la vista de historial dentro de view-app
+  // Ocultar los pasos, mostrar el panel de historial
+  [1,2,3,4].forEach(i => $(`step-${i}`)?.classList.add('hidden'));
+  $('step-success')?.classList.add('hidden');
+  $('view-historial')?.classList.remove('hidden');
+
+  // Fechas por defecto: último mes
+  if ($('hist-fecha-hasta')) {
+    const hoy    = new Date();
+    const hace30 = new Date(); hace30.setDate(hoy.getDate() - 30);
+    $('hist-fecha-hasta').value = hoy.toISOString().split('T')[0];
+    $('hist-fecha-desde').value = hace30.toISOString().split('T')[0];
+  }
+
+  _cargarHistorial();
+}
+
+async function _cargarHistorial() {
+  const desde = $('hist-fecha-desde')?.value || '';
+  const hasta = $('hist-fecha-hasta')?.value || '';
+
+  $('hist-loading')?.classList.remove('hidden');
+  $('hist-empty')?.classList.add('hidden');
+  $('hist-tabla-wrap')?.classList.add('hidden');
+
+  try {
+    const params = {};
+    if (desde) params.date_from = desde;
+    if (hasta) params.date_to   = hasta;
+
+    const res   = await Api.historialOrders(params);
+    const items = res.data?.items ?? res.data?.orders ?? [];
+
+    $('hist-loading')?.classList.add('hidden');
+
+    if (!items.length) {
+      $('hist-empty')?.classList.remove('hidden'); return;
+    }
+
+    const tbody = $('hist-tbody');
+    tbody.innerHTML = '';
+    items.forEach(o => {
+      const tr = document.createElement('tr');
+      const estado = o.status || '—';
+      const estadoColor =
+        estado === 'aprobado'   ? 'color:#059669;background:#d1fae5' :
+        estado === 'pendiente'  ? 'color:#d97706;background:#fef3c7' :
+        estado === 'recibido'   ? 'color:#2563eb;background:#dbeafe' :
+        'color:#64748b;background:#f1f5f9';
+
+      tr.innerHTML = `
+        <td class="font-mono text-xs">${esc(o.order_number || o.reference || '—')}</td>
+        <td>${esc(o.supplier?.commercial_name || o.supplier?.fiscal_name || `ID ${o.supplier_id}`)}</td>
+        <td class="text-xs">${o.created_at ? fmtDate(o.created_at.split('T')[0]) : '—'}</td>
+        <td class="text-right font-mono font-semibold">
+          ${o.total ? parseFloat(o.total).toFixed(2) + ' €' : '—'}
+        </td>
+        <td class="text-center">
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full" style="${estadoColor}">
+            ${esc(estado)}
+          </span>
+        </td>`;
+      tbody.appendChild(tr);
+    });
+
+    $('hist-tabla-wrap')?.classList.remove('hidden');
+
+  } catch(err) {
+    $('hist-loading')?.classList.add('hidden');
+    $('hist-empty')?.classList.remove('hidden');
+    $('hist-empty').textContent = 'Error al cargar el historial: ' + (err.error || 'Sin conexión');
+  }
+}
+
+function _cerrarHistorial() {
+  $('view-historial')?.classList.add('hidden');
+  goStep(S.step || 1);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   $('btn-logout').addEventListener('click', _logout);
   $('btn-nuevo').addEventListener('click',  resetFormulario);
+  $('btn-historial-nuevo')?.addEventListener('click', () => { _cerrarHistorial(); resetFormulario(); goStep(1); });
+  $('btn-hist-filtrar')?.addEventListener('click',  _cargarHistorial);
+  $('btn-hist-limpiar')?.addEventListener('click',  () => {
+    if ($('hist-fecha-desde')) $('hist-fecha-desde').value = '';
+    if ($('hist-fecha-hasta')) $('hist-fecha-hasta').value = '';
+    _cargarHistorial();
+  });
   initSedeView();
+  initMenu();
   initStep1(); initStep2(); initStep3(); initStep4();
 
   initLoginView(); // siempre registrar listeners del login
