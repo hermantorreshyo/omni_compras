@@ -3,6 +3,11 @@ Options -Indexes
 AddType application/javascript .js
 AddType application/json .json
 
+# Permitir métodos PUT y DELETE para el proxy PHP
+<Limit GET POST PUT DELETE OPTIONS>
+    Require all granted
+</Limit>
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /

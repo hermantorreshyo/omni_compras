@@ -128,7 +128,7 @@ const Api = {
   rbacScreenRegister: (b)   => Api._call('POST', { action:'rbac_screens_register' }, b),
   rbacScreensCatalog: ()    => Api._call('GET',  { action:'rbac_screens_catalog' }),
   rbacPermsGet:       ()    => Api._call('GET',  { action:'rbac_perms' }),
-  rbacPermsPut:       (b)   => Api._call('PUT',  { action:'rbac_perms' }, b),
+  rbacPermsPut:       (b)   => Api._call('POST', { action:'rbac_perms', _method:'put' }, b),
   /** RBAC de pantallas: determina qué secciones puede ver el usuario en [1002] */
   rbacScreens:        (subsystem=1002) => Api._call('GET', { action:'rbac_screens', subsystem }),
 };

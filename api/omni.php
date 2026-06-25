@@ -106,6 +106,8 @@ if (!empty($_SERVER['HTTP_X_INTERLOCUTOR_ID'])) $iid = (int)$_SERVER['HTTP_X_INT
 
 $action = strtolower(trim($_GET['action'] ?? ''));
 $method = strtoupper($_SERVER['REQUEST_METHOD']);
+// Túnel de método: ?_method=put|delete para compatibilidad Apache
+if (isset($_GET['_method'])) $method = strtoupper($_GET['_method']);
 
 switch ($action) {
 
@@ -575,7 +577,9 @@ switch ($action) {
             ok(['permissions' => $res['raw']['data'] ?? $res['raw']]);
         } elseif ($method === 'PUT') {
             $b = body();
+            error_log('[1002-RBAC-PUT] body: ' . json_encode($b, JSON_UNESCAPED_UNICODE));
             $res = apiCall('PUT', '/rbac/subsystems/1002/screen-permissions', $b, $token, $iid);
+            error_log('[1002-RBAC-PUT] response HTTP ' . ($res['status']??0) . ': ' . json_encode($res['raw'], JSON_UNESCAPED_UNICODE));
             if (!$res['ok']) fail(omniError($res,'Error al guardar permisos.'), $res['status']?:422);
             ok(['saved' => true]);
         } else { fail('Método no permitido.', 405); }
