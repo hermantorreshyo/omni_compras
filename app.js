@@ -1646,8 +1646,8 @@ function initMenu() {
    HISTORIAL DE ALBARANES
 ══════════════════════════════════════════════════════ */
 function _mostrarHistorial() {
-  // Mostrar la vista de historial dentro de view-app
-  // Ocultar los pasos, mostrar el panel de historial
+  // Ocultar barra de pasos, pasos y éxito — mostrar historial
+  $('steps-bar')?.classList.add('hidden');
   [1,2,3,4].forEach(i => $(`step-${i}`)?.classList.add('hidden'));
   $('step-success')?.classList.add('hidden');
   $('view-historial')?.classList.remove('hidden');
@@ -1722,6 +1722,7 @@ async function _cargarHistorial() {
 
 function _cerrarHistorial() {
   $('view-historial')?.classList.add('hidden');
+  $('steps-bar')?.classList.remove('hidden');
   goStep(S.step || 1);
 }
 
