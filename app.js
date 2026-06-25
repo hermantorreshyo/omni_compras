@@ -346,7 +346,16 @@ function initSedeView() {
       S.interlocutorId  = d.interlocutor_id  ?? sedeId;
       S.sedePrincipalId = S.interlocutorId;
       S.sedeName        = d.interlocutor_name ?? sedeNom;
-      S.role            = d.role        ?? '';
+
+      // El rol puede venir en d.role o en el payload del JWT
+      let _role = d.role || '';
+      if (!_role && d.token) {
+        try {
+          const _pay = JSON.parse(atob(d.token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/')));
+          _role = _pay.role || _pay.rol || '';
+        } catch(_) {}
+      }
+      S.role            = _role;
       S.permissions     = d.permissions ?? [];
       S._pendingUsername = null;
       S._pendingPassword = null;
@@ -1623,7 +1632,7 @@ function initMenu() {
     // Mostrar gestor de permisos solo para SuperAdmin
     // S.role puede venir del JWT o del objeto user
     const role = (S.role || S.user?.role || '').toLowerCase();
-    const isSuper = role.includes('superadmin');
+    const isSuper = role.includes('superadmin') || role === 'superadministrador';
     const permBtn = $('menu-btn-permisos');
     if (permBtn) permBtn.style.display = isSuper ? '' : 'none';
     dd.style.display = 'block';
@@ -1791,7 +1800,8 @@ const SCREENS_1002 = [
 const _perms = { roles: [], map: {} }; // map: { screen_key: [rol1, rol2, ...] }
 
 function _isSuperAdmin() {
-  return (S.role || '').toLowerCase().includes('superadmin');
+  const r = (S.role || S.user?.role || '').toLowerCase();
+  return r.includes('superadmin') || r === 'superadministrador';
 }
 
 async function _mostrarPermisos() {
