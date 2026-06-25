@@ -1606,38 +1606,45 @@ function _logout() {
    MENÚ HAMBURGUESA
 ══════════════════════════════════════════════════════ */
 function initMenu() {
-  const drawer  = $('menu-drawer');
-  const overlay = $('menu-overlay');
-  if (!drawer) return;
+  const dd = $('menu-dropdown');
+  if (!dd) return;
 
-  const open  = () => {
+  let open = false;
+
+  const openMenu  = () => {
     $('menu-hdr-usuario').textContent = S.user?.username ?? '—';
-    overlay.style.display = 'block';   // inline style (no clase Tailwind)
-    drawer.style.transform = 'translateX(0)';
+    dd.style.display = 'block';
+    open = true;
   };
-  const close = () => {
-    overlay.style.display = 'none';    // inline style (no clase Tailwind)
-    drawer.style.transform = 'translateX(100%)';
+  const closeMenu = () => {
+    dd.style.display = 'none';
+    open = false;
+  };
+  const toggleMenu = (e) => {
+    e.stopPropagation();
+    open ? closeMenu() : openMenu();
   };
 
-  $('btn-menu')?.addEventListener('click', open);
-  $('btn-menu-close')?.addEventListener('click', close);
-  overlay?.addEventListener('click', close);
+  $('btn-menu')?.addEventListener('click', toggleMenu);
+
+  // Cerrar al hacer clic fuera
+  document.addEventListener('click', (e) => {
+    if (open && !dd.contains(e.target)) closeMenu();
+  });
 
   $('menu-btn-inicio')?.addEventListener('click', () => {
-    close();
+    closeMenu();
     resetFormulario();
-    showView('view-app');
     goStep(1);
   });
 
   $('menu-btn-historial')?.addEventListener('click', () => {
-    close();
+    closeMenu();
     _mostrarHistorial();
   });
 
   $('menu-btn-logout')?.addEventListener('click', () => {
-    close();
+    closeMenu();
     _logout();
   });
 }
