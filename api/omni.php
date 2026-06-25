@@ -535,6 +535,22 @@ switch ($action) {
     //  PUT  /rbac/subsystems/1002/screen-permissions
     //  GET  /rbac/subsystems/1002/screens
     // ══════════════════════════════════════════════════════
+
+    case 'rbac_screens_register':
+        if ($method !== 'POST') fail('Solo POST.', 405);
+        if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
+        $b = body();
+        $res = apiCall('POST', '/rbac/subsystems/1002/screens', [
+            'screen_key' => $b['screen_key'],
+            'label'      => $b['label'],
+            'sort_order' => (int)($b['sort_order'] ?? 0),
+        ], $token, $iid);
+        // Si ya existe (409) no es error
+        if (!$res['ok'] && $res['status'] !== 409)
+            fail(omniError($res,'Error al registrar pantalla.'), $res['status']?:422);
+        ok(['registered' => true]);
+        break;
+
     case 'rbac_roles':
         if ($method !== 'GET') fail('Solo GET.', 405);
         if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');

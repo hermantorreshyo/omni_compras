@@ -125,6 +125,7 @@ const Api = {
   historialOrders: (params={}) => Api._call('GET', { action:'purchasing_order', ...params }),
   // ── Gestor de permisos (solo SuperAdmin) ─────────────
   rbacRoles:          ()    => Api._call('GET',  { action:'rbac_roles' }),
+  rbacScreenRegister: (b)   => Api._call('POST', { action:'rbac_screens_register' }, b),
   rbacScreensCatalog: ()    => Api._call('GET',  { action:'rbac_screens_catalog' }),
   rbacPermsGet:       ()    => Api._call('GET',  { action:'rbac_perms' }),
   rbacPermsPut:       (b)   => Api._call('PUT',  { action:'rbac_perms' }, b),
@@ -1820,6 +1821,12 @@ async function _mostrarPermisos() {
 
 async function _cargarPermisos() {
   try {
+    // Registrar pantallas del subsistema si no existen (idempotente — 409 es OK)
+    await Promise.all(SCREENS_1002.map((s, i) =>
+      Api.rbacScreenRegister({ screen_key: s.key, label: s.label, sort_order: i })
+        .catch(() => {})
+    ));
+
     // Cargar roles operativos y mapa actual en paralelo
     const [rolesRes, mapaRes] = await Promise.all([
       Api.rbacRoles().catch(() => ({ data: { roles: [] } })),
