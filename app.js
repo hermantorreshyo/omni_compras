@@ -1807,14 +1807,20 @@ async function _mostrarPermisos() {
     toast('Solo el SuperAdmin puede gestionar permisos.', 'error');
     return;
   }
-  $('steps-bar')?.classList.add('hidden');
-  [1,2,3,4].forEach(i => $(`step-${i}`)?.classList.add('hidden'));
-  $('step-success')?.classList.add('hidden');
-  $('view-historial')?.classList.add('hidden');
-  $('view-permisos')?.classList.remove('hidden');
-  $('permisos-loading')?.classList.remove('hidden');
-  $('permisos-cards')?.classList.add('hidden');
-  $('permisos-footer')?.classList.add('hidden');
+  // Usar style.display para no depender del CSS compilado
+  const hide = id => { const el = $(id); if (el) el.style.display = 'none'; };
+  const show = id => { const el = $(id); if (el) el.style.display = '';     };
+
+  hide('steps-bar');
+  [1,2,3,4].forEach(i => hide(`step-${i}`));
+  hide('step-success');
+  hide('view-historial');
+
+  show('view-permisos');
+  show('permisos-loading');
+  hide('permisos-cards');
+  hide('permisos-footer');
+
   await _cargarPermisos();
 }
 
@@ -1842,8 +1848,8 @@ async function _cargarPermisos() {
     _renderPermisos();
 
   } catch(err) {
-    $('permisos-loading').innerHTML =
-      '<p class="text-sm text-danger">Error al cargar: ' + esc(err.error || 'Sin conexión') + '</p>';
+    const plErr = $('permisos-loading'); if(plErr) { plErr.style.display='block'; plErr.innerHTML =
+      '<p class="text-sm text-danger">Error al cargar: ' + esc(err.error || 'Sin conexión') + '</p>'; }
   }
 }
 
@@ -1907,9 +1913,9 @@ function _renderPermisos() {
     });
   });
 
-  $('permisos-loading')?.classList.add('hidden');
-  container.classList.remove('hidden');
-  $('permisos-footer')?.classList.remove('hidden');
+  const pl=$('permisos-loading'); if(pl) pl.style.display='none';
+  container.style.display='block';
+  const pf=$('permisos-footer'); if(pf) pf.style.display='';
 }
 
 async function _guardarPermisos() {
@@ -1933,8 +1939,8 @@ async function _guardarPermisos() {
 }
 
 function _cerrarPermisos() {
-  $('view-permisos')?.classList.add('hidden');
-  $('steps-bar')?.classList.remove('hidden');
+  const el = $('view-permisos'); if (el) el.style.display = 'none';
+  const sb = $('steps-bar');     if (sb) sb.style.display = '';
   goStep(S.step || 1);
 }
 
