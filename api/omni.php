@@ -527,6 +527,44 @@ switch ($action) {
         ok(['sku' => $res['raw']['data'] ?? $res['raw']]);
         break;
 
+
+    // ══════════════════════════════════════════════════════
+    //  GESTOR DE PERMISOS — Solo SuperAdmin
+    //  GET  /rbac/roles?ambito=operativo
+    //  GET  /rbac/subsystems/1002/screen-permissions
+    //  PUT  /rbac/subsystems/1002/screen-permissions
+    //  GET  /rbac/subsystems/1002/screens
+    // ══════════════════════════════════════════════════════
+    case 'rbac_roles':
+        if ($method !== 'GET') fail('Solo GET.', 405);
+        if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
+        $res = apiCall('GET', '/rbac/roles?ambito=operativo', null, $token, $iid);
+        if (!$res['ok']) fail(omniError($res,'Error al cargar roles.'), $res['status']?:502);
+        ok(['roles' => $res['raw']['data'] ?? $res['raw']]);
+        break;
+
+    case 'rbac_screens_catalog':
+        if ($method !== 'GET') fail('Solo GET.', 405);
+        if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
+        $res = apiCall('GET', '/rbac/subsystems/1002/screens', null, $token, $iid);
+        if (!$res['ok']) ok(['screens' => []]); // fallback: catálogo vacío
+        else ok(['screens' => $res['raw']['data'] ?? $res['raw']]);
+        break;
+
+    case 'rbac_perms':
+        if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
+        if ($method === 'GET') {
+            $res = apiCall('GET', '/rbac/subsystems/1002/screen-permissions', null, $token, $iid);
+            if (!$res['ok']) fail(omniError($res,'Error al cargar permisos.'), $res['status']?:502);
+            ok(['permissions' => $res['raw']['data'] ?? $res['raw']]);
+        } elseif ($method === 'PUT') {
+            $b = body();
+            $res = apiCall('PUT', '/rbac/subsystems/1002/screen-permissions', $b, $token, $iid);
+            if (!$res['ok']) fail(omniError($res,'Error al guardar permisos.'), $res['status']?:422);
+            ok(['saved' => true]);
+        } else { fail('Método no permitido.', 405); }
+        break;
+
     default:
         fail('Acción no reconocida: ' . htmlspecialchars($action), 404, 'ERR_NOT_FOUND');
 }

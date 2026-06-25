@@ -123,6 +123,11 @@ const Api = {
   reconcileInvoice:   (id)          => Api._call('POST', { action:'invoices' }, { _action:'reconcile', invoice_id:id }),
   /** Historial de albaranes — GET /purchasing/orders */
   historialOrders: (params={}) => Api._call('GET', { action:'purchasing_order', ...params }),
+  // ── Gestor de permisos (solo SuperAdmin) ─────────────
+  rbacRoles:          ()    => Api._call('GET',  { action:'rbac_roles' }),
+  rbacScreensCatalog: ()    => Api._call('GET',  { action:'rbac_screens_catalog' }),
+  rbacPermsGet:       ()    => Api._call('GET',  { action:'rbac_perms' }),
+  rbacPermsPut:       (b)   => Api._call('PUT',  { action:'rbac_perms' }, b),
   /** RBAC de pantallas: determina qué secciones puede ver el usuario en [1002] */
   rbacScreens:        (subsystem=1002) => Api._call('GET', { action:'rbac_screens', subsystem }),
 };
@@ -358,6 +363,9 @@ function initSedeView() {
       await cargarCatalogos();
       await _cargarRbacScreens();
       showView('view-app'); goStep(1);
+      // Mostrar/ocultar opción de gestor de permisos según rol
+      const isSuper = (S.role || '').toLowerCase().includes('superadmin');
+      if ($('menu-btn-permisos')) $('menu-btn-permisos').style.display = isSuper ? '' : 'none';
 
     } catch(err) {
       const msg =
@@ -1611,6 +1619,8 @@ function initMenu() {
 
   let open = false;
 
+  // Exponer closeMenu para que otros módulos puedan cerrar el menú
+  let closeMenuFn = null;
   const openMenu  = () => {
     $('menu-hdr-usuario').textContent = S.user?.username ?? '—';
     dd.style.display = 'block';
@@ -1620,6 +1630,7 @@ function initMenu() {
     dd.style.display = 'none';
     open = false;
   };
+  closeMenuFn = closeMenu;
   const toggleMenu = (e) => {
     e.stopPropagation();
     open ? closeMenu() : openMenu();
@@ -1753,11 +1764,178 @@ function _cerrarHistorial() {
   goStep(S.step || 1);
 }
 
+
+// Catálogo fijo de pantallas del [1002] con metadatos para la UI
+const SCREENS_1002 = [
+  {
+    key:         'registro_albaran',
+    label:       'Recepción de Mercancía',
+    description: 'Alta de stock por albarán',
+  },
+  {
+    key:         'historial_albaranes',
+    label:       'Historial de Albaranes',
+    description: 'Consulta de órdenes de compra registradas',
+  },
+];
+
+/* ══════════════════════════════════════════════════════
+   GESTOR DE PERMISOS (solo SuperAdmin)
+   Patrón idéntico al [1003]
+══════════════════════════════════════════════════════ */
+
+// Estado del gestor
+const _perms = { roles: [], map: {} }; // map: { screen_key: [rol1, rol2, ...] }
+
+function _isSuperAdmin() {
+  return (S.role || '').toLowerCase().includes('superadmin');
+}
+
+async function _mostrarPermisos() {
+  if (!_isSuperAdmin()) {
+    toast('Solo el SuperAdmin puede gestionar permisos.', 'error');
+    return;
+  }
+  $('steps-bar')?.classList.add('hidden');
+  [1,2,3,4].forEach(i => $(`step-${i}`)?.classList.add('hidden'));
+  $('step-success')?.classList.add('hidden');
+  $('view-historial')?.classList.add('hidden');
+  $('view-permisos')?.classList.remove('hidden');
+  $('permisos-loading')?.classList.remove('hidden');
+  $('permisos-cards')?.classList.add('hidden');
+  $('permisos-footer')?.classList.add('hidden');
+  await _cargarPermisos();
+}
+
+async function _cargarPermisos() {
+  try {
+    // Cargar roles operativos y mapa actual en paralelo
+    const [rolesRes, mapaRes] = await Promise.all([
+      Api.rbacRoles().catch(() => ({ data: { roles: [] } })),
+      Api.rbacPermsGet().catch(() => ({ data: { permissions: {} } })),
+    ]);
+
+    // Normalizar roles
+    const rawRoles = rolesRes.data?.roles ?? rolesRes.data ?? [];
+    _perms.roles = Array.isArray(rawRoles)
+      ? rawRoles.map(r => typeof r === 'string' ? r : (r.nombre || r.name || r.role || String(r)))
+      : [];
+
+    // Normalizar mapa de permisos { screen_key: [roles] }
+    const rawMap = mapaRes.data?.permissions ?? mapaRes.data ?? {};
+    _perms.map = {};
+    SCREENS_1002.forEach(s => {
+      _perms.map[s.key] = Array.isArray(rawMap[s.key]) ? [...rawMap[s.key]] : [];
+    });
+
+    _renderPermisos();
+
+  } catch(err) {
+    $('permisos-loading').innerHTML =
+      '<p class="text-sm text-danger">Error al cargar: ' + esc(err.error || 'Sin conexión') + '</p>';
+  }
+}
+
+function _renderPermisos() {
+  const container = $('permisos-cards');
+  container.innerHTML = '';
+
+  SCREENS_1002.forEach(screen => {
+    const asignados = _perms.map[screen.key] || [];
+
+    const card = document.createElement('div');
+    card.className = 'bg-white rounded-2xl border border-ink-200 p-5';
+    card.innerHTML = `
+      <div class="mb-3">
+        <p class="text-sm font-bold text-ink-900">${esc(screen.label)}</p>
+        <p class="text-xs text-ink-400 mt-0.5">${esc(screen.description)}</p>
+      </div>
+      <div class="flex flex-wrap gap-2" id="chips-${esc(screen.key)}"></div>`;
+    container.appendChild(card);
+
+    // Renderizar chips de roles
+    const chipsEl = document.getElementById('chips-' + screen.key);
+
+    // Todos los roles disponibles + roles ya asignados que no estén en la lista
+    const todosRoles = [
+      ..._perms.roles,
+      ...asignados.filter(r => !_perms.roles.includes(r)),
+    ];
+
+    todosRoles.forEach(rol => {
+      const activo = asignados.includes(rol);
+      const chip   = document.createElement('button');
+      chip.type    = 'button';
+      chip.dataset.screen = screen.key;
+      chip.dataset.rol    = rol;
+      chip.dataset.activo = activo ? '1' : '0';
+      chip.style.cssText  = `
+        padding:5px 13px;border-radius:9999px;font-size:12px;font-weight:500;
+        cursor:pointer;border:1px solid;transition:all 0.15s;
+        ${activo
+          ? 'background:#642a72;color:#fff;border-color:#642a72'
+          : 'background:#fff;color:#64748b;border-color:#e2e8f0'}`;
+      chip.textContent = rol;
+
+      chip.addEventListener('click', () => {
+        const esActivo = chip.dataset.activo === '1';
+        chip.dataset.activo = esActivo ? '0' : '1';
+        chip.style.background   = esActivo ? '#fff'     : '#642a72';
+        chip.style.color        = esActivo ? '#64748b'  : '#fff';
+        chip.style.borderColor  = esActivo ? '#e2e8f0'  : '#642a72';
+
+        // Actualizar el mapa en memoria
+        if (esActivo) {
+          _perms.map[screen.key] = _perms.map[screen.key].filter(r => r !== rol);
+        } else {
+          _perms.map[screen.key] = [...(_perms.map[screen.key] || []), rol];
+        }
+      });
+
+      chipsEl.appendChild(chip);
+    });
+  });
+
+  $('permisos-loading')?.classList.add('hidden');
+  container.classList.remove('hidden');
+  $('permisos-footer')?.classList.remove('hidden');
+}
+
+async function _guardarPermisos() {
+  const btn    = $('btn-permisos-guardar');
+  const msgEl  = $('permisos-save-msg');
+  btn.disabled = true;
+  btn.textContent = 'Guardando…';
+  msgEl?.classList.add('hidden');
+
+  try {
+    await Api.rbacPermsPut({ permissions: _perms.map });
+    msgEl?.classList.remove('hidden');
+    toast('Permisos guardados correctamente.', 'ok');
+    setTimeout(() => msgEl?.classList.add('hidden'), 3000);
+  } catch(err) {
+    toast('Error al guardar: ' + (err.error || 'Sin conexión'), 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Guardar permisos';
+  }
+}
+
+function _cerrarPermisos() {
+  $('view-permisos')?.classList.add('hidden');
+  $('steps-bar')?.classList.remove('hidden');
+  goStep(S.step || 1);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   $('btn-logout').addEventListener('click', _logout);
   $('btn-nuevo').addEventListener('click',  resetFormulario);
   $('btn-historial-nuevo')?.addEventListener('click', () => { _cerrarHistorial(); resetFormulario(); goStep(1); });
   $('btn-hist-filtrar')?.addEventListener('click',  _cargarHistorial);
+  // Gestor de permisos
+  $('menu-btn-permisos')?.addEventListener('click', () => { closeMenuFn?.(); _mostrarPermisos(); });
+  $('btn-permisos-volver')?.addEventListener('click', _cerrarPermisos);
+  $('btn-permisos-guardar')?.addEventListener('click', _guardarPermisos);
   $('btn-hist-limpiar')?.addEventListener('click',  () => {
     if ($('hist-fecha-desde')) $('hist-fecha-desde').value = '';
     if ($('hist-fecha-hasta')) $('hist-fecha-hasta').value = '';
