@@ -1675,19 +1675,13 @@ function initMenu() {
    HISTORIAL DE ALBARANES
 ══════════════════════════════════════════════════════ */
 function _mostrarHistorial() {
-  // Ocultar barra de pasos, pasos y éxito — mostrar historial
-  $('steps-bar')?.classList.add('hidden');
-  [1,2,3,4].forEach(i => $(`step-${i}`)?.classList.add('hidden'));
-  $('step-success')?.classList.add('hidden');
-  $('view-historial')?.classList.remove('hidden');
+  showView('view-historial');
 
   // Fechas por defecto: último mes
-  if ($('hist-fecha-hasta')) {
-    const hoy    = new Date();
-    const hace30 = new Date(); hace30.setDate(hoy.getDate() - 30);
-    $('hist-fecha-hasta').value = hoy.toISOString().split('T')[0];
-    $('hist-fecha-desde').value = hace30.toISOString().split('T')[0];
-  }
+  const hoy = new Date(), hace30 = new Date();
+  hace30.setDate(hoy.getDate() - 30);
+  if ($('hist-fecha-hasta')) $('hist-fecha-hasta').value = hoy.toISOString().split('T')[0];
+  if ($('hist-fecha-desde')) $('hist-fecha-desde').value = hace30.toISOString().split('T')[0];
 
   _cargarHistorial();
 }
@@ -1770,8 +1764,7 @@ async function _cargarHistorial() {
 }
 
 function _cerrarHistorial() {
-  $('view-historial')?.classList.add('hidden');
-  $('steps-bar')?.classList.remove('hidden');
+  showView('view-app');
   goStep(S.step || 1);
 }
 
@@ -1976,7 +1969,8 @@ function _cerrarPermisos() {
 document.addEventListener('DOMContentLoaded', () => {
   $('btn-logout').addEventListener('click', _logout);
   $('btn-nuevo').addEventListener('click',  resetFormulario);
-  $('btn-historial-nuevo')?.addEventListener('click', () => { _cerrarHistorial(); resetFormulario(); goStep(1); });
+  $('btn-historial-nuevo')?.addEventListener('click', () => { showView('view-app'); resetFormulario(); goStep(1); });
+  $('btn-historial-volver')?.addEventListener('click', () => { showView('view-app'); goStep(S.step || 1); });
   $('btn-hist-filtrar')?.addEventListener('click',  _cargarHistorial);
   // Gestor de permisos
   $('menu-btn-permisos')?.addEventListener('click', () => { window._closeMenu?.(); _mostrarPermisos(); });

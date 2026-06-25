@@ -1118,69 +1118,6 @@
 
 
   <!-- ── VISTA: HISTORIAL DE ALBARANES ── -->
-  <div id="view-historial" class="hidden space-y-4">
-    <div class="bg-white rounded-2xl border border-ink-200 p-5">
-      <div class="flex items-center justify-between gap-3 mb-4">
-        <div>
-          <h2 class="text-base font-semibold text-ink-900">Historial de albaranes</h2>
-          <p class="text-xs text-ink-500 mt-0.5">Órdenes de compra registradas</p>
-        </div>
-        <button id="btn-historial-nuevo"
-          class="flex items-center gap-2 bg-brand text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors">
-          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
-          </svg>
-          Nuevo albarán
-        </button>
-      </div>
-      <div class="flex flex-wrap gap-3">
-        <div class="flex items-center gap-2">
-          <label class="text-xs font-medium text-ink-600">Desde</label>
-          <input id="hist-fecha-desde" type="date"
-            class="px-3 py-1.5 text-xs border border-ink-300 rounded-lg focus:border-brand focus:outline-none" />
-        </div>
-        <div class="flex items-center gap-2">
-          <label class="text-xs font-medium text-ink-600">Hasta</label>
-          <input id="hist-fecha-hasta" type="date"
-            class="px-3 py-1.5 text-xs border border-ink-300 rounded-lg focus:border-brand focus:outline-none" />
-        </div>
-        <button id="btn-hist-filtrar"
-          class="flex items-center gap-1.5 bg-ink-100 hover:bg-ink-200 text-ink-700 text-xs font-medium px-4 py-1.5 rounded-lg transition-colors">
-          <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591L15.75 12v8.25l-4.5-2.25V12L4.659 7.409A2.25 2.25 0 0 1 4 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z"/>
-          </svg>
-          Filtrar
-        </button>
-        <button id="btn-hist-limpiar" class="text-xs text-ink-400 hover:text-ink-700 underline">Limpiar</button>
-      </div>
-    </div>
-    <div class="bg-white rounded-2xl border border-ink-200 overflow-hidden">
-      <div id="hist-loading" class="hidden px-6 py-10 text-center">
-        <svg class="spin w-6 h-6 mx-auto" style="color:#642a72" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-        </svg>
-        <p class="text-xs text-ink-400 mt-2">Cargando albaranes…</p>
-      </div>
-      <div id="hist-empty" class="hidden px-6 py-10 text-center">
-        <p class="text-sm text-ink-500">No hay albaranes en el rango seleccionado.</p>
-      </div>
-      <div id="hist-tabla-wrap" class="hidden overflow-x-auto">
-        <table class="w-full tbl" style="min-width:560px">
-          <thead>
-            <tr>
-              <th class="text-left">N.º Referencia</th>
-              <th class="text-left">Proveedor</th>
-              <th class="text-left">Fecha</th>
-              <th class="text-right">Total</th>
-              <th class="text-center">Estado</th>
-            </tr>
-          </thead>
-          <tbody id="hist-tbody"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
 
   </main>
 </div>
@@ -1287,6 +1224,75 @@
   </main>
 </div>
 
-<script src="app.js?v=20260625o" defer></script>
+
+<!-- ══════════════════════════════════════════════════════════
+     VISTA SPA: HISTORIAL DE ALBARANES (nivel raíz)
+══════════════════════════════════════════════════════════ -->
+<div id="view-historial" class="view flex-col min-h-screen">
+  <header style="background:#642a72;color:#fff;padding:0 16px;height:56px;
+    display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:30">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,0.2);
+        display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">JP</div>
+      <div>
+        <p style="font-size:13px;font-weight:700;margin:0;line-height:1.2">JOSEPAN 360</p>
+        <p style="font-size:10px;margin:0;opacity:0.75">Historial de albaranes · [1002]</p>
+      </div>
+    </div>
+    <button id="btn-historial-volver" style="background:rgba(255,255,255,0.15);border:none;color:#fff;
+      font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer">← Volver</button>
+  </header>
+  <main style="flex:1;max-width:860px;width:100%;margin:0 auto;padding:20px 16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap">
+      <div>
+        <h2 style="font-size:18px;font-weight:700;color:#0f172a;margin:0 0 2px">Historial de albaranes</h2>
+        <p style="font-size:13px;color:#64748b;margin:0">Órdenes de compra registradas</p>
+      </div>
+      <button id="btn-historial-nuevo" style="background:#642a72;border:none;color:#fff;
+        font-size:12px;font-weight:600;padding:8px 16px;border-radius:8px;cursor:pointer;white-space:nowrap">
+        + Nuevo albarán</button>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:16px;
+      display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+      <label style="font-size:12px;font-weight:600;color:#475569">Desde</label>
+      <input id="hist-fecha-desde" type="date" style="padding:6px 10px;font-size:12px;border:1px solid #e2e8f0;border-radius:8px;outline:none"/>
+      <label style="font-size:12px;font-weight:600;color:#475569">Hasta</label>
+      <input id="hist-fecha-hasta" type="date" style="padding:6px 10px;font-size:12px;border:1px solid #e2e8f0;border-radius:8px;outline:none"/>
+      <button id="btn-hist-filtrar" style="background:#f1f5f9;border:none;font-size:12px;font-weight:600;
+        color:#334155;padding:7px 14px;border-radius:8px;cursor:pointer">Filtrar</button>
+      <button id="btn-hist-limpiar" style="background:none;border:none;font-size:12px;
+        color:#94a3b8;cursor:pointer;text-decoration:underline">Limpiar</button>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+      <div id="hist-loading" style="display:none;padding:40px;text-align:center">
+        <svg style="width:24px;height:24px;margin:0 auto 8px;animation:spin 0.7s linear infinite"
+          fill="none" viewBox="0 0 24 24">
+          <circle style="opacity:0.25" cx="12" cy="12" r="10" stroke="#642a72" stroke-width="4"/>
+          <path style="opacity:0.75" fill="#642a72" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8;margin:0">Cargando albaranes…</p>
+      </div>
+      <div id="hist-empty" style="display:none;padding:40px;text-align:center">
+        <p style="font-size:13px;color:#64748b;margin:0">No hay albaranes en el rango seleccionado.</p>
+      </div>
+      <div id="hist-tabla-wrap" style="display:none;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;min-width:500px">
+          <thead>
+            <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0">
+              <th style="padding:10px 16px;font-size:11px;font-weight:700;color:#64748b;text-align:left;text-transform:uppercase">N.º Referencia</th>
+              <th style="padding:10px 16px;font-size:11px;font-weight:700;color:#64748b;text-align:left;text-transform:uppercase">Proveedor</th>
+              <th style="padding:10px 16px;font-size:11px;font-weight:700;color:#64748b;text-align:left;text-transform:uppercase">Fecha</th>
+              <th style="padding:10px 16px;font-size:11px;font-weight:700;color:#64748b;text-align:right;text-transform:uppercase">Total</th>
+              <th style="padding:10px 16px;font-size:11px;font-weight:700;color:#64748b;text-align:center;text-transform:uppercase">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="hist-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="app.js?v=20260625p" defer></script>
 </body>
 </html>
