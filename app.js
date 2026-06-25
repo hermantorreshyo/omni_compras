@@ -1612,11 +1612,11 @@ function initMenu() {
 
   const open  = () => {
     $('menu-hdr-usuario').textContent = S.user?.username ?? '—';
-    overlay.classList.remove('hidden');
+    overlay.style.display = 'block';   // inline style (no clase Tailwind)
     drawer.style.transform = 'translateX(0)';
   };
   const close = () => {
-    overlay.classList.add('hidden');
+    overlay.style.display = 'none';    // inline style (no clase Tailwind)
     drawer.style.transform = 'translateX(100%)';
   };
 
