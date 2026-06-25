@@ -1821,49 +1821,59 @@ async function _mostrarPermisos() {
 
 async function _cargarPermisos() {
   try {
-    // Registrar pantallas del subsistema si no existen (idempotente — 409 es OK)
-    await Promise.all(SCREENS_1002.map((s, i) =>
-      Api.rbacScreenRegister({ screen_key: s.key, label: s.label, sort_order: i })
-        .catch(() => {})
-    ));
+    // v6.8: GET devuelve screens + roles + permissions en un solo endpoint
+    let res;
+    try {
+      res = await Api.rbacPermsGet();
+    } catch(e) {
+      // Si el GET falla con NOT_FOUND, registrar pantallas con PUT vacío y reintentar
+      if (e.code === 'ERR_NOT_FOUND' || e.code === 'ERR_VALIDATION') {
+        await Api.rbacPermsPut({ permissions: {
+          registro_albaran:   [],
+          historial_albaranes: [],
+        }}).catch(() => {});
+        res = await Api.rbacPermsGet();
+      } else throw e;
+    }
 
-    // Cargar roles operativos y mapa actual en paralelo
-    const [rolesRes, mapaRes] = await Promise.all([
-      Api.rbacRoles().catch(() => ({ data: { roles: [] } })),
-      Api.rbacPermsGet().catch(() => ({ data: { permissions: {} } })),
-    ]);
+    const data = res.data ?? {};
 
-    // Roles conocidos del ecosistema JOSEPAN 360 como fallback
+    // Roles: vienen como [{id, name}] en v6.8, con fallback al ecosistema JOSEPAN
     const ROLES_FALLBACK = [
-      'Jefe de Compras', 'Jefe de Almacen', 'Jefe de Producción',
-      'Gerente de Sede', 'Encargado de Tienda', 'Operario de Almacen',
-      'Operario de Producción', 'Camarero', 'Encargado de Caja',
-      'Encargado de Cocina', 'Encargado de Panaderia', 'Chofer Logístico',
-      'Auditor de Inventarios', 'Cocinero', 'Panadero', 'Pastelero',
-      'Administrativo', 'Office', 'Produccion',
+      'Jefe de Compras','Jefe de Almacen','Jefe de Producción','Gerente de Sede',
+      'Encargado de Tienda','Operario de Almacen','Operario de Producción','Camarero',
+      'Encargado de Caja','Encargado de Cocina','Encargado de Panaderia','Chofer Logístico',
+      'Auditor de Inventarios','Cocinero','Panadero','Pastelero','Administrativo','Office','Produccion',
     ];
+    const rawRoles = data.roles ?? [];
+    _perms.roles = Array.isArray(rawRoles) && rawRoles.length
+      ? rawRoles.map(r => typeof r === 'string' ? r : (r.name || r.nombre || String(r))).filter(Boolean)
+      : ROLES_FALLBACK;
 
-    // Normalizar roles desde API
-    const rawRoles = rolesRes.data?.roles ?? rolesRes.data ?? [];
-    const apiRoles = Array.isArray(rawRoles)
-      ? rawRoles.map(r => typeof r === 'string' ? r : (r.nombre || r.name || r.role || String(r))).filter(Boolean)
-      : [];
+    // Screens: vienen del API o usamos el catálogo local
+    const apiScreens = Array.isArray(data.screens) && data.screens.length
+      ? data.screens
+      : SCREENS_1002.map(s => ({ screen_key: s.key, label: s.label }));
 
-    // Usar roles del API si llegaron, si no usar el fallback
-    _perms.roles = apiRoles.length > 0 ? apiRoles : ROLES_FALLBACK;
+    // Actualizar SCREENS_1002 con lo que el API tiene registrado
+    _perms.screens = apiScreens;
 
-    // Normalizar mapa de permisos { screen_key: [roles] }
-    const rawMap = mapaRes.data?.permissions ?? mapaRes.data ?? {};
+    // Mapa de permisos { screen_key: [roles] }
+    const rawMap = data.permissions ?? {};
     _perms.map = {};
-    SCREENS_1002.forEach(s => {
-      _perms.map[s.key] = Array.isArray(rawMap[s.key]) ? [...rawMap[s.key]] : [];
+    apiScreens.forEach(s => {
+      const key = s.screen_key || s.key;
+      _perms.map[key] = Array.isArray(rawMap[key]) ? [...rawMap[key]] : [];
     });
 
     _renderPermisos();
 
   } catch(err) {
-    const plErr = $('permisos-loading'); if(plErr) { plErr.style.display='block'; plErr.innerHTML =
-      '<p class="text-sm text-danger">Error al cargar: ' + esc(err.error || 'Sin conexión') + '</p>'; }
+    const plErr = $('permisos-loading');
+    if (plErr) {
+      plErr.style.display = 'block';
+      plErr.innerHTML = '<p style="color:#ef4444;font-size:13px">Error al cargar: ' + esc(err.error || err.code || 'Sin conexión') + '</p>';
+    }
   }
 }
 
@@ -1871,8 +1881,15 @@ function _renderPermisos() {
   const container = $('permisos-cards');
   container.innerHTML = '';
 
-  SCREENS_1002.forEach(screen => {
-    const asignados = _perms.map[screen.key] || [];
+  const screens = _perms.screens?.length ? _perms.screens.map(s => ({
+    key: s.screen_key || s.key,
+    label: s.label,
+    description: SCREENS_1002.find(x => x.key === (s.screen_key||s.key))?.description || '',
+  })) : SCREENS_1002;
+
+  screens.forEach(screen => {
+    const key = screen.key || screen.screen_key;
+    const asignados = _perms.map[key] || [];
 
     const card = document.createElement('div');
     card.style.cssText = 'background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:20px;margin-bottom:16px';
@@ -1881,11 +1898,11 @@ function _renderPermisos() {
         <p style="font-size:14px;font-weight:700;color:#0f172a;margin:0">${esc(screen.label)}</p>
         <p style="font-size:12px;color:#94a3b8;margin:4px 0 0">${esc(screen.description)}</p>
       </div>
-      <div id="chips-${esc(screen.key)}" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px"></div>`;
+      <div id="chips-${esc(key)}" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px"></div>`;
     container.appendChild(card);
 
     // Renderizar chips de roles
-    const chipsEl = document.getElementById('chips-' + screen.key);
+    const chipsEl = document.getElementById('chips-' + key);
 
     // Todos los roles disponibles + roles ya asignados que no estén en la lista
     const todosRoles = [
@@ -1897,7 +1914,7 @@ function _renderPermisos() {
       const activo = asignados.includes(rol);
       const chip   = document.createElement('button');
       chip.type    = 'button';
-      chip.dataset.screen = screen.key;
+      chip.dataset.screen = key;
       chip.dataset.rol    = rol;
       chip.dataset.activo = activo ? '1' : '0';
       chip.style.cssText = (activo
@@ -1916,9 +1933,9 @@ function _renderPermisos() {
 
         // Actualizar el mapa en memoria
         if (esActivo) {
-          _perms.map[screen.key] = _perms.map[screen.key].filter(r => r !== rol);
+          _perms.map[key] = _perms.map[key].filter(r => r !== rol);
         } else {
-          _perms.map[screen.key] = [...(_perms.map[screen.key] || []), rol];
+          _perms.map[key] = [...(_perms.map[key] || []), rol];
         }
       });
 

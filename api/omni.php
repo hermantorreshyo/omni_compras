@@ -573,14 +573,12 @@ switch ($action) {
         if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
         if ($method === 'GET') {
             $res = apiCall('GET', '/rbac/subsystems/1002/screen-permissions', null, $token, $iid);
-            error_log('[1002-RBAC-GET] raw: ' . json_encode($res['raw'], JSON_UNESCAPED_UNICODE));
-            if (!$res['ok']) fail(omniError($res,'Error al cargar permisos.'), $res['status']?:502);
-            ok(['permissions' => $res['raw']['data'] ?? $res['raw']]);
+            if (!$res['ok']) fail(omniError($res,'Error al cargar permisos.'), $res['status']?:502, $res['omni_code']??'ERR_NOT_FOUND');
+            // v6.8: pasar data completa (screens + roles + permissions)
+            ok($res['raw']['data'] ?? $res['raw']);
         } elseif ($method === 'PUT') {
             $b = body();
-            error_log('[1002-RBAC-PUT] body: ' . json_encode($b, JSON_UNESCAPED_UNICODE));
             $res = apiCall('PUT', '/rbac/subsystems/1002/screen-permissions', $b, $token, $iid);
-            error_log('[1002-RBAC-PUT] response HTTP ' . ($res['status']??0) . ': ' . json_encode($res['raw'], JSON_UNESCAPED_UNICODE));
             if (!$res['ok']) fail(omniError($res,'Error al guardar permisos.'), $res['status']?:422);
             ok(['saved' => true]);
         } else { fail('Método no permitido.', 405); }
