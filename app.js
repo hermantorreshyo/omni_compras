@@ -1807,19 +1807,13 @@ async function _mostrarPermisos() {
     toast('Solo el SuperAdmin puede gestionar permisos.', 'error');
     return;
   }
-  // Usar style.display para no depender del CSS compilado
-  const hide = id => { const el = $(id); if (el) el.style.display = 'none'; };
-  const show = id => { const el = $(id); if (el) el.style.display = '';     };
+  // view-permisos es ahora una vista SPA raíz — usar showView() como el login
+  showView('view-permisos');
 
-  hide('steps-bar');
-  [1,2,3,4].forEach(i => hide(`step-${i}`));
-  hide('step-success');
-  hide('view-historial');
-
-  show('view-permisos');
-  show('permisos-loading');
-  hide('permisos-cards');
-  hide('permisos-footer');
+  // Resetear estado visual
+  const pl = $('permisos-loading'); if (pl) pl.style.display = 'block';
+  const pc = $('permisos-cards');   if (pc) pc.style.display = 'none';
+  const pf = $('permisos-footer');  if (pf) pf.style.display = 'none';
 
   await _cargarPermisos();
 }
@@ -1939,8 +1933,7 @@ async function _guardarPermisos() {
 }
 
 function _cerrarPermisos() {
-  const el = $('view-permisos'); if (el) el.style.display = 'none';
-  const sb = $('steps-bar');     if (sb) sb.style.display = '';
+  showView('view-app');
   goStep(S.step || 1);
 }
 

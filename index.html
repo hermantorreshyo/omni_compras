@@ -1117,51 +1117,6 @@
 
 
 
-  <!-- ── VISTA: GESTOR DE PERMISOS ── -->
-  <div id="view-permisos" class="hidden space-y-4">
-
-    <!-- Header -->
-    <div class="bg-white rounded-2xl border border-ink-200 p-5">
-      <div class="flex items-center justify-between gap-3 mb-1">
-        <div>
-          <h2 class="text-base font-semibold text-ink-900">Gestor de permisos</h2>
-          <p class="text-xs text-ink-500 mt-0.5">Asocia cada pantalla del módulo a los roles operativos del API CORE. El SuperAdmin siempre ve todas las pantallas.</p>
-        </div>
-        <button id="btn-permisos-volver"
-          class="text-sm font-medium text-ink-500 hover:text-ink-800 flex items-center gap-1.5 transition-colors flex-shrink-0">
-          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"/>
-          </svg>
-          Volver
-        </button>
-      </div>
-    </div>
-
-    <!-- Cards de pantallas -->
-    <div id="permisos-loading" class="bg-white rounded-2xl border border-ink-200 p-10 text-center">
-      <svg class="spin w-6 h-6 mx-auto" style="color:#642a72" fill="none" viewBox="0 0 24 24">
-        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-      </svg>
-      <p class="text-xs text-ink-400 mt-2">Cargando permisos…</p>
-    </div>
-
-    <div id="permisos-cards" class="hidden space-y-4"></div>
-
-    <!-- Botón guardar -->
-    <div id="permisos-footer" class="hidden flex justify-end gap-3 pb-4">
-      <p id="permisos-save-msg" class="hidden text-sm text-ok font-medium">✓ Guardado correctamente</p>
-      <button id="btn-permisos-guardar"
-        class="flex items-center gap-2 bg-brand text-white font-semibold text-sm py-2.5 px-6 rounded-lg transition-colors">
-        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
-        </svg>
-        Guardar permisos
-      </button>
-    </div>
-
-  </div>
-
   <!-- ── VISTA: HISTORIAL DE ALBARANES ── -->
   <div id="view-historial" class="hidden space-y-4">
     <div class="bg-white rounded-2xl border border-ink-200 p-5">
@@ -1266,6 +1221,72 @@
   </div>
 </div>
 
-<script src="app.js?v=20260625j" defer></script>
+
+<!-- ══════════════════════════════════════════════════════════
+     VISTA SPA: GESTOR DE PERMISOS (nivel raíz, solo SuperAdmin)
+══════════════════════════════════════════════════════════ -->
+<div id="view-permisos" class="view flex-col min-h-screen">
+
+  <!-- Header -->
+  <header style="background:#642a72;color:#fff;padding:0 16px;height:56px;
+    display:flex;align-items:center;justify-content:space-between;
+    position:sticky;top:0;z-index:30">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,0.2);
+        display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">JP</div>
+      <div>
+        <p style="font-size:13px;font-weight:700;margin:0;line-height:1.2">JOSEPAN 360</p>
+        <p style="font-size:10px;margin:0;opacity:0.75">Gestor de permisos · [1002]</p>
+      </div>
+    </div>
+    <button id="btn-permisos-volver"
+      style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.15);
+        border:none;color:#fff;font-size:12px;font-weight:600;padding:6px 12px;
+        border-radius:8px;cursor:pointer">
+      ← Volver
+    </button>
+  </header>
+
+  <main style="flex:1;max-width:640px;width:100%;margin:0 auto;padding:20px 16px">
+
+    <!-- Título -->
+    <div style="margin-bottom:20px">
+      <h2 style="font-size:18px;font-weight:700;color:#0f172a;margin:0 0 4px">Gestor de permisos</h2>
+      <p style="font-size:13px;color:#64748b;margin:0">
+        Asocia cada pantalla del módulo a los roles operativos del API CORE.
+        El SuperAdmin siempre ve todas las pantallas.
+      </p>
+    </div>
+
+    <!-- Estado: cargando -->
+    <div id="permisos-loading" style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;
+      padding:40px;text-align:center">
+      <svg style="width:24px;height:24px;margin:0 auto 8px;color:#642a72;animation:spin 0.7s linear infinite"
+        fill="none" viewBox="0 0 24 24">
+        <circle style="opacity:0.25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path style="opacity:0.75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+      </svg>
+      <p style="font-size:12px;color:#94a3b8;margin:0">Cargando permisos…</p>
+    </div>
+
+    <!-- Cards de pantallas -->
+    <div id="permisos-cards" style="display:none"></div>
+
+    <!-- Botón guardar -->
+    <div id="permisos-footer" style="display:none;margin-top:16px;text-align:right">
+      <p id="permisos-save-msg" style="display:none;font-size:13px;color:#10b981;
+        font-weight:600;margin:0 0 8px">✓ Guardado correctamente</p>
+      <button id="btn-permisos-guardar"
+        style="display:inline-flex;align-items:center;gap:8px;background:#642a72;
+          color:#fff;border:none;font-size:13px;font-weight:600;padding:10px 24px;
+          border-radius:10px;cursor:pointer">
+        Guardar permisos
+      </button>
+    </div>
+
+  </main>
+</div>
+
+<script src="app.js?v=20260625k" defer></script>
 </body>
 </html>
