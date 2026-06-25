@@ -1625,8 +1625,6 @@ function initMenu() {
 
   let open = false;
 
-  // Exponer closeMenu para que otros módulos puedan cerrar el menú
-  let closeMenuFn = null;
   const openMenu  = () => {
     $('menu-hdr-usuario').textContent = S.user?.username ?? '—';
     // Mostrar gestor de permisos solo para SuperAdmin
@@ -1642,7 +1640,7 @@ function initMenu() {
     dd.style.display = 'none';
     open = false;
   };
-  closeMenuFn = closeMenu;
+  window._closeMenu = closeMenu; // exponer globalmente
   const toggleMenu = (e) => {
     e.stopPropagation();
     open ? closeMenu() : openMenu();
@@ -1946,7 +1944,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btn-historial-nuevo')?.addEventListener('click', () => { _cerrarHistorial(); resetFormulario(); goStep(1); });
   $('btn-hist-filtrar')?.addEventListener('click',  _cargarHistorial);
   // Gestor de permisos
-  $('menu-btn-permisos')?.addEventListener('click', () => { closeMenuFn?.(); _mostrarPermisos(); });
+  $('menu-btn-permisos')?.addEventListener('click', () => { window._closeMenu?.(); _mostrarPermisos(); });
   $('btn-permisos-volver')?.addEventListener('click', _cerrarPermisos);
   $('btn-permisos-guardar')?.addEventListener('click', _guardarPermisos);
   $('btn-hist-limpiar')?.addEventListener('click',  () => {
