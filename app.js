@@ -1664,25 +1664,41 @@ function _mostrarHistorial() {
 }
 
 async function _cargarHistorial() {
+  // El API GET /purchasing/orders acepta: status, supplier_id (no date_from/date_to)
+  // El filtro de fecha se aplica en el cliente sobre los resultados recibidos
   const desde = $('hist-fecha-desde')?.value || '';
   const hasta = $('hist-fecha-hasta')?.value || '';
 
-  $('hist-loading')?.classList.remove('hidden');
-  $('hist-empty')?.classList.add('hidden');
-  $('hist-tabla-wrap')?.classList.add('hidden');
+  const loading    = $('hist-loading');
+  const emptyEl    = $('hist-empty');
+  const tablaWrap  = $('hist-tabla-wrap');
+
+  if (loading)   loading.style.display   = 'block';
+  if (emptyEl)   emptyEl.style.display   = 'none';
+  if (tablaWrap) tablaWrap.style.display = 'none';
 
   try {
-    const params = {};
-    if (desde) params.date_from = desde;
-    if (hasta) params.date_to   = hasta;
+    const res   = await Api.historialOrders();
+    // Extraer filas — el API puede devolver data.rows, data.orders o data directamente
+    let items = res.data?.rows ?? res.data?.orders ?? res.data?.items ?? res.data ?? [];
+    if (!Array.isArray(items)) items = [];
 
-    const res   = await Api.historialOrders(params);
-    const items = res.data?.items ?? res.data?.orders ?? [];
+    // Filtro de fecha en cliente
+    if (desde || hasta) {
+      items = items.filter(o => {
+        const fecha = (o.created_at || o.date || '').substring(0, 10);
+        if (!fecha) return true;
+        if (desde && fecha < desde) return false;
+        if (hasta && fecha > hasta) return false;
+        return true;
+      });
+    }
 
-    $('hist-loading')?.classList.add('hidden');
+    if (loading) loading.style.display = 'none';
 
     if (!items.length) {
-      $('hist-empty')?.classList.remove('hidden'); return;
+      if (emptyEl) { emptyEl.style.display = 'block'; emptyEl.textContent = 'No hay albaranes en el rango seleccionado.'; }
+      return;
     }
 
     const tbody = $('hist-tbody');
@@ -1690,33 +1706,37 @@ async function _cargarHistorial() {
     items.forEach(o => {
       const tr = document.createElement('tr');
       const estado = o.status || '—';
-      const estadoColor =
-        estado === 'aprobado'   ? 'color:#059669;background:#d1fae5' :
-        estado === 'pendiente'  ? 'color:#d97706;background:#fef3c7' :
-        estado === 'recibido'   ? 'color:#2563eb;background:#dbeafe' :
+      const estadoStyle =
+        estado === 'aprobado'  ? 'color:#059669;background:#d1fae5' :
+        estado === 'pendiente' ? 'color:#d97706;background:#fef3c7' :
+        estado === 'recibido'  ? 'color:#2563eb;background:#dbeafe' :
         'color:#64748b;background:#f1f5f9';
 
-      tr.innerHTML = `
-        <td class="font-mono text-xs">${esc(o.order_number || o.reference || '—')}</td>
-        <td>${esc(o.supplier?.commercial_name || o.supplier?.fiscal_name || `ID ${o.supplier_id}`)}</td>
-        <td class="text-xs">${o.created_at ? fmtDate(o.created_at.split('T')[0]) : '—'}</td>
-        <td class="text-right font-mono font-semibold">
-          ${o.total ? parseFloat(o.total).toFixed(2) + ' €' : '—'}
-        </td>
-        <td class="text-center">
-          <span class="text-[10px] font-bold px-2 py-0.5 rounded-full" style="${estadoColor}">
-            ${esc(estado)}
-          </span>
-        </td>`;
+      const supplierName = o.supplier?.commercial_name
+        || o.supplier?.fiscal_name
+        || o.supplier_name
+        || (o.supplier_id ? `Proveedor ${o.supplier_id}` : '—');
+
+      const fecha = o.created_at ? fmtDate(o.created_at.substring(0,10)) : (o.date ? fmtDate(o.date) : '—');
+      const total = (o.total !== undefined && o.total !== null) ? parseFloat(o.total).toFixed(2) + ' €' : '—';
+
+      tr.innerHTML =
+        '<td class="font-mono text-xs">' + esc(o.order_number || o.reference || String(o.id || '—')) + '</td>' +
+        '<td>' + esc(supplierName) + '</td>' +
+        '<td class="text-xs">' + fecha + '</td>' +
+        '<td class="text-right font-mono font-semibold">' + total + '</td>' +
+        '<td class="text-center"><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:9999px;' + estadoStyle + '">' + esc(estado) + '</span></td>';
       tbody.appendChild(tr);
     });
 
-    $('hist-tabla-wrap')?.classList.remove('hidden');
+    if (tablaWrap) tablaWrap.style.display = 'block';
 
   } catch(err) {
-    $('hist-loading')?.classList.add('hidden');
-    $('hist-empty')?.classList.remove('hidden');
-    $('hist-empty').textContent = 'Error al cargar el historial: ' + (err.error || 'Sin conexión');
+    if (loading) loading.style.display = 'none';
+    if (emptyEl) {
+      emptyEl.style.display = 'block';
+      emptyEl.textContent = 'Error al cargar: ' + (err.error || err.code || 'Sin conexión');
+    }
   }
 }
 
