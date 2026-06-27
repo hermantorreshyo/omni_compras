@@ -301,6 +301,9 @@ switch ($action) {
             if (!empty($_GET['reference']))      $p['reference']     = $_GET['reference'];
             $res = apiCall('GET', '/purchasing/orders' . ($p ? '?' . http_build_query($p) : ''), null, $token, $iid);
             if (!$res['ok']) fail(omniError($res, 'Error al cargar albaranes.'), $res['status'] ?: 502);
+            // DEBUG
+            error_log('[1002-HIST] raw: ' . json_encode($res['raw'], JSON_UNESCAPED_UNICODE));
+            error_log('[1002-HIST] rowsOf: ' . json_encode(rowsOf($res), JSON_UNESCAPED_UNICODE));
             ok(['items' => rowsOf($res)]);
 
         } elseif ($method === 'POST') {
