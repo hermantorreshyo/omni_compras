@@ -299,8 +299,6 @@ switch ($action) {
             if (!empty($_GET['date_from']))      $p['date_from']     = $_GET['date_from'];
             if (!empty($_GET['date_to']))        $p['date_to']       = $_GET['date_to'];
             if (!empty($_GET['reference']))      $p['reference']     = $_GET['reference'];
-            // Filtrar por sede del usuario autenticado
-            if ($iid) $p['interlocutor_id'] = (int)$iid;
             $res = apiCall('GET', '/purchasing/orders' . ($p ? '?' . http_build_query($p) : ''), null, $token, $iid);
             if (!$res['ok']) fail(omniError($res, 'Error al cargar albaranes.'), $res['status'] ?: 502);
             ok(['items' => rowsOf($res)]);
@@ -336,8 +334,9 @@ switch ($action) {
                     'supplier_id' => (int)$b['supplier_id'],
                     'details'     => $b['details'] ?? [],
                 ];
-                if (!empty($b['reference'])) $payload['reference'] = $b['reference'];
-                if (!empty($b['notes']))     $payload['notes']     = $b['notes'];
+                if (!empty($b['interlocutor_id'])) $payload['interlocutor_id'] = (int)$b['interlocutor_id'];
+                if (!empty($b['reference']))       $payload['reference']       = $b['reference'];
+                if (!empty($b['notes']))           $payload['notes']           = $b['notes'];
                 $res = apiCall('POST', '/purchasing/orders', $payload, $token, $iid);
                 if (!$res['ok']) fail(omniError($res, 'Error al crear albarán.'), $res['status'] ?: 422, $res['omni_code'] ?? 'ERR_VALIDATION');
                 ok(['order' => $res['raw']['data'] ?? $res['raw']]);

@@ -1504,14 +1504,31 @@ function initStep4() {
     errEl.classList.add('hidden');
 
     try {
-      // ── PASO A: Lote + Recepción física por cada ítem
-      // El endpoint POST /purchasing/orders requiere supplier_item_id
-      // que solo existe tras dar de alta artículos por proveedor —
-      // proceso que no está disponible en este subsistema.
-      // El registro de inventario (batch + reception) es suficiente
-      // para actualizar el kardex y el stock disponible.
+      // ── PASO 1: Crear la OC con todos los detalles ─────────
+      const orderRes = await Api.purchasingOrder({
+        supplier_id:     S.proveedorId,
+        interlocutor_id: S.interlocutorId,
+        reference:       S.numAlbaran,
+        details: S.items.map(item => ({
+          supplier_item_name: item.nombre,
+          item_id:            item.skuId,
+          item_type:          'sku',
+          unit_of_measure:    item.unidadBase,
+          quantity_requested: item.quantity,
+          unit_price:         item.costPerUnit ?? 0,
+        })),
+      });
+      const orderId     = orderRes.data?.id ?? orderRes.data?.order?.id;
+      const orderNumber = orderRes.data?.order_number ?? S.numAlbaran;
+      S.purchaseOrderId = orderId;
+
+      // ── PASO 2: Aprobar la OC ───────────────────────────────
+      if (orderId) {
+        await Api.approvePurchasingOrder(orderId).catch(() => {});
+      }
+
+      // ── PASOS 3 y 4: Batch + Recepción por cada ítem ───────
       for (const item of S.items) {
-        // Crear lote (FEFO)
         const batchRes = await Api._call('POST', { action:'batch' }, {
           batch_reference: item.batchRef,
           item_id:         item.skuId,
@@ -1524,7 +1541,6 @@ function initStep4() {
           ?? batchRes.data?.batch_id;
         if (!batchId) throw { error: `No se obtuvo batch_id para "${item.nombre}".` };
 
-        // Registrar entrada en kardex
         await Api.receive({
           location_id:        S.bodegaId || 1,
           batch_id:           batchId,
@@ -1532,7 +1548,7 @@ function initStep4() {
           item_type:          'sku',
           quantity:           item.quantity,
           movement_type:      'Compra',
-          reference_document: S.numAlbaran,
+          reference_document: orderNumber,  // vincula recepción con la OC
         });
       }
 
