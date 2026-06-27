@@ -296,6 +296,9 @@ switch ($action) {
             $p = [];
             if (!empty($_GET['supplier_id'])) $p['supplier_id'] = (int)$_GET['supplier_id'];
             if (!empty($_GET['status']))      $p['status']      = $_GET['status'];
+            // Filtrar por sede: el X-Interlocutor-Id ya va en el header de apiCall
+            // pero algunos endpoints requieren el parámetro explícito
+            if ($iid) $p['interlocutor_id'] = (int)$iid;
             $res = apiCall('GET', '/purchasing/orders' . ($p ? '?' . http_build_query($p) : ''), null, $token, $iid);
             if (!$res['ok']) fail(omniError($res, 'Error al cargar albaranes.'), $res['status'] ?: 502);
             ok(['items' => rowsOf($res)]);
