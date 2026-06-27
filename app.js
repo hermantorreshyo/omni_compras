@@ -1703,21 +1703,14 @@ async function _cargarHistorial() {
   if (tablaWrap) tablaWrap.style.display = 'none';
 
   try {
-    const res   = await Api.historialOrders();
-    // Extraer filas — el API puede devolver data.rows, data.orders o data directamente
+    // Pasar filtros directamente al API (acepta date_from, date_to, interlocutor_id)
+    const apiParams = {};
+    if (desde) apiParams.date_from = desde;
+    if (hasta)  apiParams.date_to   = hasta;
+
+    const res   = await Api.historialOrders(apiParams);
     let items = res.data?.rows ?? res.data?.orders ?? res.data?.items ?? res.data ?? [];
     if (!Array.isArray(items)) items = [];
-
-    // Filtro de fecha en cliente
-    if (desde || hasta) {
-      items = items.filter(o => {
-        const fecha = (o.created_at || o.date || '').substring(0, 10);
-        if (!fecha) return true;
-        if (desde && fecha < desde) return false;
-        if (hasta && fecha > hasta) return false;
-        return true;
-      });
-    }
 
     if (loading) loading.style.display = 'none';
 

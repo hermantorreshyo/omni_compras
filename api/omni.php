@@ -294,10 +294,12 @@ switch ($action) {
 
         if ($method === 'GET') {
             $p = [];
-            if (!empty($_GET['supplier_id'])) $p['supplier_id'] = (int)$_GET['supplier_id'];
-            if (!empty($_GET['status']))      $p['status']      = $_GET['status'];
-            // Filtrar por sede: el X-Interlocutor-Id ya va en el header de apiCall
-            // pero algunos endpoints requieren el parámetro explícito
+            if (!empty($_GET['supplier_id']))   $p['supplier_id']   = (int)$_GET['supplier_id'];
+            if (!empty($_GET['status']))         $p['status']        = $_GET['status'];
+            if (!empty($_GET['date_from']))      $p['date_from']     = $_GET['date_from'];
+            if (!empty($_GET['date_to']))        $p['date_to']       = $_GET['date_to'];
+            if (!empty($_GET['reference']))      $p['reference']     = $_GET['reference'];
+            // Filtrar por sede del usuario autenticado
             if ($iid) $p['interlocutor_id'] = (int)$iid;
             $res = apiCall('GET', '/purchasing/orders' . ($p ? '?' . http_build_query($p) : ''), null, $token, $iid);
             if (!$res['ok']) fail(omniError($res, 'Error al cargar albaranes.'), $res['status'] ?: 502);
