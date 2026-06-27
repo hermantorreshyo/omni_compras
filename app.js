@@ -237,7 +237,8 @@ function toast(msg, type = 'ok') {
 ══════════════════════════════════════════════════════ */
 function showView(id) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  $(id).classList.add('active');
+  $(id)?.classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
 function goStep(n) {
@@ -266,6 +267,7 @@ function goStep(n) {
     }
   });
   $('step-success')?.classList.add('hidden');
+  window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
 /* ══════════════════════════════════════════════════════
@@ -1567,7 +1569,7 @@ function initStep4() {
       // Ocultar pasos y mostrar éxito
       [1,2,3,4].forEach(i => $(`step-${i}`)?.classList.add('hidden'));
       $('step-success').classList.remove('hidden');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      window.scrollTo({ top: 0, behavior: 'instant' });
       toast(`Albarán ${S.numAlbaran} registrado correctamente.`, 'ok');
 
     } catch (err) {
