@@ -115,7 +115,7 @@ const Api = {
   // ── Órdenes de compra (/purchasing/orders) ───────────
   // Crear con details[] inline (supplier_id + líneas en una sola llamada)
   purchasingOrder:    (b)           => Api._call('POST', { action:'purchasing_order' }, b),
-  approvePurchasingOrder: (orderId) => Api._call('POST', { action:'purchasing_order' }, { _action:'approve', order_id:orderId }),
+  approvePurchasingOrder: (orderId, receptionDate) => Api._call('POST', { action:'purchasing_order' }, { _action:'approve', order_id:orderId, reception_date: receptionDate }),
   receivePurchasingOrder: (orderId, details) => Api._call('POST', { action:'purchasing_order' }, { _action:'receive', order_id:orderId, details }),
   getPurchasingOrders:(params={})   => Api._call('GET',  { action:'purchasing_order', ...params }),
   // ── Facturas (/purchasing/invoices) ──────────────────
@@ -367,10 +367,7 @@ function initSedeView() {
       $('hdr-sede').textContent            = S.sedeName;
       if ($('hdr-nombre-mobile')) $('hdr-nombre-mobile').textContent = d.username ?? S.user?.username ?? '—';
       if ($('hdr-sede-m'))        $('hdr-sede-m').textContent        = S.sedeName;
-      $('lbl-fecha').textContent  = new Date().toLocaleString('es-ES',{
-        day:'2-digit', month:'2-digit', year:'numeric',
-        hour:'2-digit', minute:'2-digit'
-      });
+
 
       await cargarCatalogos();
       await _cargarRbacScreens();
@@ -1009,6 +1006,11 @@ function _ocrRenderPanel(panel, ocr, pmFound) {
 ══════════════════════════════════════════════════════ */
 function initStep2() {
   $('btn-step2-back').addEventListener('click', () => goStep(1));
+
+  // Inicializar fecha de recepción con hoy por defecto
+  const hoy = new Date().toISOString().split('T')[0];
+  if ($('inp-fecha-recepcion') && !$('inp-fecha-recepcion').value)
+    $('inp-fecha-recepcion').value = hoy;
   $('sel-proveedor').addEventListener('change', e => {
     if (e.target.value === '__new__') { e.target.value=''; abrirModalProveedor(); }
   });
@@ -1022,6 +1024,7 @@ function initStep2() {
     if (!num)  { toast('Introduce el número de albarán.','warn'); return; }
     if (!prov) { toast('Selecciona o crea el proveedor.','warn'); return; }
     S.numAlbaran   = num;
+    S.receptionDate = $('inp-fecha-recepcion')?.value || new Date().toISOString().split('T')[0];
     S.proveedorId  = parseInt(prov,10);
     S.proveedorNom = $('sel-proveedor').selectedOptions[0]?.text??'';
     S.bodegaId     = parseInt($('sel-ubicacion').value||'0',10);
@@ -1513,6 +1516,7 @@ function initStep4() {
         supplier_id:     S.proveedorId,
         interlocutor_id: S.interlocutorId,
         reference:       S.numAlbaran,
+        reception_date:  S.receptionDate,
         details: S.items.map(item => ({
           supplier_item_name: item.nombre,
           item_id:            item.skuId,
@@ -1528,7 +1532,7 @@ function initStep4() {
 
       // ── PASO 2: Aprobar la OC ───────────────────────────────
       if (orderId) {
-        await Api.approvePurchasingOrder(orderId).catch(() => {});
+        await Api.approvePurchasingOrder(orderId, S.receptionDate).catch(() => {});
       }
 
       // ── PASOS 3 y 4: Batch + Recepción por cada ítem ───────
@@ -1755,7 +1759,8 @@ async function _cargarHistorial() {
         || o.supplier_name
         || (o.supplier_id ? `Proveedor ${o.supplier_id}` : '—');
 
-      const fecha = o.created_at ? fmtDate(o.created_at.substring(0,10)) : (o.date ? fmtDate(o.date) : '—');
+      const fechaRaw = o.reception_date || o.created_at || o.date || '';
+      const fecha = fechaRaw ? fmtDate(fechaRaw.substring(0,10)) : '—';
       const total = (o.total !== undefined && o.total !== null) ? parseFloat(o.total).toFixed(2) + ' €' : '—';
 
       tr.innerHTML =

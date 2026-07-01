@@ -312,7 +312,8 @@ switch ($action) {
                 // PUT /purchasing/orders/{id}/approve
                 $oid = (int)($b['order_id'] ?? 0);
                 if (!$oid) fail('order_id es obligatorio.', 400, 'ERR_VALIDATION');
-                $res = apiCall('PUT', "/purchasing/orders/{$oid}/approve", [], $token, $iid);
+                $approveBody = !empty($b['reception_date']) ? ['reception_date' => $b['reception_date']] : [];
+                $res = apiCall('PUT', "/purchasing/orders/{$oid}/approve", $approveBody, $token, $iid);
                 if (!$res['ok']) fail(omniError($res, 'Error al aprobar albarán.'), $res['status'] ?: 422, $res['omni_code'] ?? 'ERR_STATE');
                 ok(['order' => $res['raw']['data'] ?? $res['raw']]);
 
