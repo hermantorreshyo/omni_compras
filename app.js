@@ -467,7 +467,13 @@ function poblarSelectBodega() {
 function poblarSelectProveedor() {
   const sel = $('sel-proveedor'); if (!sel) return;
   sel.innerHTML = '<option value="">— Seleccionar proveedor —</option><option value="__new__">+ Crear nuevo proveedor…</option>';
-  S.suppliers.forEach(i => {
+  // Ordenar alfabéticamente por nombre comercial
+  const sorted = [...S.suppliers].sort((a, b) => {
+    const na = (a.commercial_name || a.fiscal_name || '').toLowerCase();
+    const nb = (b.commercial_name || b.fiscal_name || '').toLowerCase();
+    return na.localeCompare(nb, 'es');
+  });
+  sorted.forEach(i => {
     const o = document.createElement('option');
     o.value = i.id;
     o.textContent = i.commercial_name || i.fiscal_name || `Proveedor ${i.id}`;
@@ -747,9 +753,8 @@ function _bindOcrCardListeners() {
       const nom   = btn.dataset.skunom;
 
       if (!qty || qty <= 0)            { toast('La cantidad debe ser mayor que cero.', 'warn'); return; }
-      if (!lote)                        { toast('El código de lote es obligatorio.', 'warn'); return; }
-      if (!vence)                       { toast('La fecha de vencimiento es obligatoria.', 'warn'); return; }
-      if (new Date(vence) <= new Date()){ toast('Fecha de vencimiento inválida.', 'warn'); return; }
+      // Lote y vencimiento opcionales
+      if (vence && new Date(vence) <= new Date()){ toast('Fecha de vencimiento inválida.', 'warn'); return; }
 
       const ocrPrecio = parseFloat(String(card.querySelector('.ocr-precio')?.value || '0').replace(',','.')) || 0;
       const ocrDto    = parseFloat(card.querySelector('.ocr-dto')?.value    || '0') || 0;
@@ -1381,7 +1386,7 @@ function abrirConv(sku) {
 
   // Pre-rellenar desde OCR si viene de "Buscar"
   const eanInp = $('input-ean');
-  $('inp-lote').value  = eanInp?.dataset.ocrLote  || genLote();
+  $('inp-lote').value  = eanInp?.dataset.ocrLote  || '';
   $('inp-vence').value = eanInp?.dataset.ocrVence || '';
   $('inp-qty').value   = '';
   if (eanInp) { delete eanInp.dataset.ocrLote; delete eanInp.dataset.ocrVence; delete eanInp.dataset.ocrCant; }
@@ -1425,9 +1430,8 @@ function añadirItem() {
   const qty=parseFloat($('inp-qty').value), ub=$('hid-sku-ub').value, uc=ub; // §20: uc=ub (sin selector de formato)
   const lote=$('inp-lote').value.trim(), vence=$('inp-vence').value;
   if (!qty||qty<=0)              {toast('Cantidad > 0','warn');return;}
-  if (!lote)                     {toast('Código de lote obligatorio.','warn');return;}
-  if (!vence)                    {toast('Fecha de vencimiento obligatoria.','warn');return;}
-  if (new Date(vence)<=new Date()){toast('Fecha de vencimiento inválida.','warn');return;}
+  // Lote y vencimiento son opcionales — algunos proveedores no los suministran
+  if (vence && new Date(vence)<=new Date()){toast('Fecha de vencimiento inválida.','warn');return;}
 
   const ps2        = parseInt($('hid-sku-ps')?.value || '1', 10);
   const quantityFinal = convertir(qty, ub, uc);
@@ -1533,7 +1537,7 @@ function initStep4() {
           batch_reference: item.batchRef,
           item_id:         item.skuId,
           item_type:       'sku',
-          expiration_date: item.expDate,
+          ...(item.expDate ? { expiration_date: item.expDate } : {}),
           cost_per_unit:   item.costPerUnit ?? 0,
         });
         const batchId = batchRes.data?.batch?.id
