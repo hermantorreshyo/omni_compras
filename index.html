@@ -1,419 +1,1301 @@
 <!DOCTYPE html>
-<html lang="es" class="h-full">
+<html lang="es">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#642a72" />
-  <title>JOSEPAN 360 · [1003] Almacén</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JOSEPAN 360 · Albaranes de Compras [1002]</title>
 
-  <!-- Tailwind CSS (CDN) -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            brand: { DEFAULT: '#642a72', 600: '#56245f', 50: '#f3edf5' },
-            ok:    { DEFAULT: '#10B981', 700: '#047857' },
-            warn:  { DEFAULT: '#F59E0B', 700: '#b45309' },
-            err:   { DEFAULT: '#EF4444', 700: '#b91c1c' },
-            ink:   { 100: '#f4f5f7', 200: '#e5e7eb', 400: '#9ca3af', 700: '#374151', 900: '#111827' },
-          },
-          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
-        },
-      },
-    };
-  </script>
-
-  <!-- Inter -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css?v=20260622" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
   <style>
-    *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-    html, body { margin: 0; height: 100%; }
-    body { font-family: 'Inter', sans-serif; background: #f4f5f7; color: #111827; }
-    input, select, textarea { font-size: 16px; } /* evita zoom iOS */
-
-    /* Botones (área táctil ≥ 46px) */
-    .btn-prim, .btn-ok, .btn-ghost { min-height: 52px; border-radius: 14px; font-weight: 600; font-size: 1rem; width: 100%; border: 0; cursor: pointer; }
-    .btn-prim  { background: #642a72; color: #fff; }
-    .btn-prim:active { background: #56245f; }
-    .btn-ok    { background: #10B981; color: #fff; }
-    .btn-ok:active { background: #047857; }
-    .btn-ghost { background: #fff; color: #374151; border: 1px solid #e5e7eb; }
-    button:disabled { opacity: .45; cursor: not-allowed; }
-
-    .btn-ok-sm, .btn-prim-sm, .btn-del-sm { min-height: 46px; min-width: 46px; border-radius: 12px; font-weight: 600; padding: 0 14px; border: 0; cursor: pointer; }
-    .btn-ok-sm   { background: #10B981; color: #fff; }
-    .btn-prim-sm { background: #642a72; color: #fff; }
-    .btn-del-sm  { background: #fff; color: #b91c1c; border: 1px solid #fecaca; }
-
-    /* Inputs */
-    .num, .txt, .sel { width: 100%; min-height: 52px; border: 1px solid #e5e7eb; border-radius: 12px; padding: 0 14px; background: #fff; }
-    .num { text-align: right; font-weight: 700; font-size: 1.25rem; }
-    textarea.txt { min-height: 96px; padding: 12px 14px; resize: vertical; }
-
-    /* Cards / listas */
-    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; }
-    .tile { display: flex; flex-direction: column; gap: 4px; text-align: left; background: #fff; border: 1px solid #e5e7eb; border-left: 5px solid #642a72; border-radius: 16px; padding: 18px 16px; min-height: 84px; cursor: pointer; }
-    .tile-t { font-weight: 700; font-size: 1.05rem; }
-    .tile-d { font-size: .85rem; color: #6b7280; }
-    .rowcard { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 16px; min-height: 64px; text-align: left; cursor: pointer; }
-    .rowcard.col { flex-direction: column; align-items: stretch; }
-    .rowcard-top { display: flex; justify-content: space-between; align-items: center; }
-    .rowcard-ctrls { display: flex; flex-direction: column; gap: 10px; margin-top: 12px; }
-    .rowcard small, .grid-row small { display: block; color: #6b7280; font-size: .8rem; }
-    .chip { background: #f3edf5; color: #642a72; font-weight: 600; font-size: .8rem; padding: 6px 10px; border-radius: 999px; white-space: nowrap; }
-    .tile-admin { border-left-color: #F59E0B; }
-    .perm-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; padding: 14px 16px; }
-    .perm-card-h { font-weight: 700; font-size: 1rem; }
-    .perm-card-d { font-size: .82rem; color: #6b7280; margin-bottom: 10px; }
-    .chip-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
-    .chip-wrap .chip { cursor: pointer; min-height: 36px; border: 1px solid #e7dcec; opacity: .65; }
-    .chip-wrap .chip-on { background: #642a72; color: #fff; border-color: #642a72; opacity: 1; }
-    .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .kpi { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px 16px; }
-    .kpi-v { font-size: 1.7rem; font-weight: 800; color: #642a72; line-height: 1; }
-    .kpi-l { font-size: .82rem; color: #6b7280; margin-top: 6px; }
-    .kpi-ok .kpi-v { color: #0a7d54; } .kpi-warn .kpi-v { color: #a86a06; }
-    .dash-row { display: flex; align-items: center; gap: 10px; margin: 7px 0; font-size: .85rem; }
-    .dash-row-lbl { width: 120px; color: #374151; flex: none; }
-    .dash-bar { flex: 1; height: 12px; background: #f3edf5; border-radius: 999px; overflow: hidden; }
-    .dash-bar i { display: block; height: 100%; background: #642a72; }
-    .dash-row-n { width: 28px; text-align: right; font-weight: 700; color: #642a72; flex: none; }
-    .sku-res { display: none; border: 1px solid #e5e7eb; border-radius: 12px; margin-top: 6px; overflow: hidden; background: #fff; max-height: 260px; overflow-y: auto; }
-    .sku-res.open { display: block; }
-    .sku-opt { display: block; width: 100%; text-align: left; padding: 12px 14px; border: 0; border-bottom: 1px solid #f1f1f4; background: #fff; font-size: .92rem; cursor: pointer; min-height: 46px; }
-    .sku-opt:hover, .sku-opt:active { background: #f3edf5; color: #642a72; }
-    .sku-empty { padding: 12px 14px; color: #6b7280; font-size: .9rem; }
-    .sku-opt.sel { background: #642a72; color: #fff; }
-    .ro-field { background: #f3edf5; border: 1px solid #e7dcec; color: #642a72; font-weight: 700; border-radius: 12px; padding: 12px 14px; min-height: 46px; display: flex; align-items: center; }
-    .oc-card { background: #fff; border: 1px solid #e5e7eb; border-left: 5px solid #642a72; border-radius: 16px; padding: 16px; }
-    .oc-card.oc-done { border-left-color: #10B981; background: #f5fbf8; }
-    .oc-card-h { display: flex; flex-direction: column; }
-    .oc-card-h b { font-size: 1rem; } .oc-card-h small { color: #6b7280; }
-    .oc-card-sub { font-size: .85rem; color: #374151; margin: 4px 0 8px; }
-    .oc-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
-    .hub-legend { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 14px; }
-    .hub-legend span { display: inline-flex; align-items: center; gap: 6px; font-size: .8rem; color: #4b5563; }
-    .hub-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
-
-    .grid-row { background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 14px; margin-bottom: 10px; }
-    .grid-row-head { margin-bottom: 10px; }
-    .grid-row-body { display: flex; gap: 10px; align-items: center; }
-    .grid-row-body .num { flex: 1; }
-
-    .skel { height: 64px; border-radius: 14px; background: linear-gradient(90deg,#eee,#f6f6f6,#eee); background-size: 200% 100%; animation: sh 1.2s infinite; margin-bottom: 10px; }
-    @keyframes sh { to { background-position: -200% 0; } }
-    .empty { text-align: center; color: #6b7280; padding: 28px 12px; border: 1px dashed #e5e7eb; border-radius: 14px; }
-    .empty-err { color: #b91c1c; border-color: #fecaca; background: #fef2f2; }
-
+    body { font-family: 'Inter', sans-serif; }
+    /* Transición de vistas */
+    .view { display: none; }
+    .view.active { display: flex; }
+    /* Focus rings */
+    input:focus, select:focus, button:focus-visible {
+      outline: 2px solid #642a72; outline-offset: 2px;
+    }
+    /* Spinner */
+    .spin { animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     /* Toast */
-    #toast { position: fixed; left: 16px; right: 16px; bottom: 18px; z-index: 60; padding: 14px 16px; border-radius: 12px; color: #fff; font-weight: 600; text-align: center; }
-    #toast[data-type="ok"]   { background: #10B981; }
-    #toast[data-type="warn"] { background: #F59E0B; }
-    #toast[data-type="err"]  { background: #EF4444; }
-
-    /* Offline badge */
-    #offline-badge { background: #F59E0B; color: #fff; font-weight: 700; font-size: .8rem; padding: 6px 12px; border-radius: 999px; }
-
-    /* Numpad */
-    #numpad { position: fixed; inset: 0; z-index: 70; background: rgba(17,24,39,.55); display: flex; align-items: flex-end; }
-    .numpad-sheet { background: #fff; width: 100%; border-radius: 20px 20px 0 0; padding: 16px; }
-    #numpad-display { text-align: right; font-size: 2rem; font-weight: 800; padding: 8px 12px 16px; }
-    .numpad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-    .numpad-grid button { min-height: 60px; border-radius: 14px; border: 1px solid #e5e7eb; background: #f9fafb; font-size: 1.4rem; font-weight: 700; cursor: pointer; }
-    .numpad-grid .k-ok { background: #10B981; color: #fff; border: 0; grid-column: span 3; }
-
-    /* Cámara */
-    .cam-wrap { border-radius: 14px; overflow: hidden; background: #000; margin-bottom: 12px; }
-    .cam-wrap video { width: 100%; display: block; }
-
-    /* Parada de emergencia */
-    #view-emergency { position: fixed; inset: 0; z-index: 80; background: #EF4444; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 28px; }
-    #view-emergency h2 { font-size: 1.6rem; font-weight: 800; }
-
-    .wrap { max-width: 560px; margin: 0 auto; padding: 16px; }
-    .sec-title { font-size: 1.25rem; font-weight: 800; margin: 4px 0 14px; }
-    .field-label { font-size: .85rem; font-weight: 600; color: #374151; margin: 12px 0 6px; }
-    .hidden { display: none !important; }
+    #toast { transition: opacity 0.3s, transform 0.3s; }
+    #toast.hide { opacity: 0; transform: translateY(8px); pointer-events: none; }
+    /* Step indicator */
+    .step-line { flex: 1; height: 2px; background: #e2e8f0; }
+    .step-line.done { background: #642a72; }
+    /* Tabla */
+    .tbl th { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #64748b; padding: 10px 16px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+    .tbl td { padding: 12px 16px; border-bottom: 1px solid #f1f5f9; font-size: 0.875rem; color: #334155; vertical-align: middle; }
+    .tbl tr:last-child td { border-bottom: none; }
+    .tbl tr:hover td { background: #f8fafc; }
+    /* Dropdown */
+    #ean-dropdown { box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
   </style>
 </head>
-<body>
+<body class="bg-ink-100 min-h-screen">
 
-  <!-- ── HEADER ─────────────────────────────────────────────────── -->
-  <header id="app-header" class="hidden" style="position:sticky;top:0;z-index:40;background:#642a72;color:#fff;">
-    <div class="wrap" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;">
-      <div>
-        <div style="font-weight:800;letter-spacing:.5px;">JOSEPAN 360 · ALMACÉN</div>
-        <div style="font-size:.78rem;opacity:.85;"><span id="hdr-user">—</span> · <span id="hdr-rol">—</span></div>
+<!-- ══════════════════════════════════════════════════════════
+     TOAST GLOBAL
+══════════════════════════════════════════════════════════ -->
+<div id="toast" class="hide fixed bottom-6 left-1/2 -translate-x-1/2 z-50
+  flex items-center gap-3 px-5 py-3 rounded-xl shadow-xl text-white text-sm font-medium
+  max-w-sm w-full">
+  <span id="toast-icon" class="text-lg flex-shrink-0">✓</span>
+  <span id="toast-msg">—</span>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     VISTA: LOGIN
+══════════════════════════════════════════════════════════ -->
+<div id="view-login" class="view active min-h-screen flex-col items-center justify-center p-4">
+  <div class="w-full max-w-md">
+    <!-- Logo -->
+    <div class="text-center mb-8">
+      <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-brand mb-4 shadow-lg">
+        <span class="text-white font-bold text-xl">JP</span>
       </div>
-      <div style="display:flex;align-items:center;gap:10px;">
-        <span id="offline-badge" class="hidden">Offline · <span id="offline-count">0</span> retenidas</span>
-        <button id="hdr-logout" class="btn-del-sm" style="background:#fff;color:#b91c1c;border:0;">Salir</button>
+      <h1 class="text-2xl font-bold text-ink-900">JOSEPAN 360</h1>
+      <p class="text-ink-500 text-sm mt-1">Registro de Albaranes de Compras <span class="font-mono text-xs bg-ink-200 px-1.5 py-0.5 rounded">[1002]</span></p>
+    </div>
+
+    <!-- Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-ink-200 p-8">
+      <h2 class="text-lg font-semibold text-ink-900 mb-6">Iniciar sesión</h2>
+
+      <div id="form-login" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-ink-700 mb-1.5" for="inp-username">Usuario</label>
+          <input id="inp-username" type="text" name="username" autocomplete="username"
+            placeholder="nombre.apellido"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900 placeholder-ink-400
+                   focus:border-brand transition-colors" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-ink-700 mb-1.5" for="inp-password">Contraseña</label>
+          <div class="relative">
+            <input id="inp-password" type="password" name="password" autocomplete="current-password"
+              placeholder="••••••••"
+              class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900 placeholder-ink-400
+                     focus:border-brand transition-colors pr-10" />
+            <button type="button" id="btn-toggle-pass"
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-ink-400 hover:text-ink-600 transition-colors">
+              <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/>
+              </svg>
+            </button>
+          </div>
+          <p class="text-xs text-ink-400 mt-1.5">Contraseña inicial: tu propio nombre de usuario (ej: <span class="font-mono">lesly.garcia</span>)</p>
+        </div>
+
+
+
+        <p id="login-error" class="hidden text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></p>
+
+        <button type="button" id="btn-login"
+          class="w-full bg-brand hover:bg-brand-light text-white font-semibold py-2.5 px-4 rounded-lg
+                 transition-colors text-sm flex items-center justify-center gap-2 mt-2">
+          <span id="btn-login-label">Entrar</span>
+          <svg id="btn-login-spin" class="spin hidden w-4 h-4" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     VISTA: SELECCIÓN DE SEDE (post-login)
+══════════════════════════════════════════════════════════ -->
+<div id="view-sede" class="view flex-col min-h-screen">
+  <header class="bg-white border-b border-ink-200 shadow-sm">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4" style="position:relative">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-lg bg-brand flex items-center justify-center">
+          <span class="text-white font-bold text-xs">JP</span>
+        </div>
+        <p class="text-sm font-semibold text-ink-900">JOSEPAN 360</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="sede-hdr-nombre" class="text-sm text-ink-600 hidden sm:block">—</span>
+        <button id="btn-sede-logout"
+          class="text-xs font-medium text-ink-500 hover:text-danger bg-ink-100 hover:bg-red-50
+                 px-3 py-1.5 rounded-lg transition-colors">
+          Salir
+        </button>
       </div>
     </div>
   </header>
 
-  <main>
-
-    <!-- ── LOGIN ────────────────────────────────────────────────── -->
-    <section id="view-login" class="view wrap" style="padding-top:48px;">
-      <div style="text-align:center;margin-bottom:28px;">
-        <div style="font-size:1.6rem;font-weight:800;color:#642a72;">JOSEPAN 360</div>
-        <div style="color:#6b7280;">[1003] Gestión de Almacenes y Mermas</div>
+  <main class="flex-1 flex items-center justify-center p-4">
+    <div class="w-full max-w-sm">
+      <div class="text-center mb-6">
+        <div class="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center mx-auto mb-3" style="background:rgba(100,42,114,0.1)">
+          <svg width="28" height="28" fill="none" viewBox="0 0 24 24" stroke="#642a72" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349M3.75 21V9.349m0 0a3.001 3.001 0 0 0 3.75-.615A2.993 2.993 0 0 0 9.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 0 0 2.25 1.016 2.993 2.993 0 0 0 2.25-1.016 3.001 3.001 0 0 0 3.75.614m-16.5 0a3.004 3.004 0 0 1-.621-4.72l1.189-1.19A1.5 1.5 0 0 1 5.378 3h13.243a1.5 1.5 0 0 1 1.06.44l1.19 1.189a3 3 0 0 1-.621 4.72M6.75 18h3.75a.75.75 0 0 0 .75-.75V13.5a.75.75 0 0 0-.75-.75H6.75a.75.75 0 0 0-.75.75v3.75c0 .414.336.75.75.75Z"/>
+          </svg>
+        </div>
+        <h2 class="text-lg font-bold text-ink-900">¿Desde qué sede trabajas hoy?</h2>
+        <p class="text-sm text-ink-500 mt-1">Selecciona la sede para filtrar el inventario correctamente</p>
       </div>
-      <div class="card" style="padding:20px;">
-        <div class="field-label">Usuario</div>
-        <input id="login-user" class="txt" autocomplete="username" placeholder="nombre.apellido" />
-        <div class="field-label">Contraseña</div>
-        <input id="login-pass" type="password" class="txt" autocomplete="current-password" placeholder="••••••••" />
-        <div style="height:16px;"></div>
-        <button id="login-btn" class="btn-prim">Entrar</button>
+
+      <div class="bg-white rounded-2xl border border-ink-200 shadow-sm p-6 space-y-4">
+        <p id="sede-error"
+          class="hidden text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></p>
+
+        <div class="relative">
+          <select id="sel-sede"
+            class="w-full px-3.5 py-3 rounded-xl border-2 border-ink-200 text-sm text-ink-900
+                   focus:border-brand transition-colors appearance-none bg-white pr-10
+                   focus:outline-none font-medium">
+            <option value="">— Seleccionar sede —</option>
+          </select>
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24"
+            stroke="#94a3b8" stroke-width="2" pointer-events="none"
+            style="position:absolute;right:12px;top:50%;transform:translateY(-50%)">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+          </svg>
+        </div>
+
+        <button id="btn-confirmar-sede"
+          class="w-full bg-brand hover:bg-brand-light text-white font-semibold py-3 px-4
+                 rounded-xl transition-colors text-sm flex items-center justify-center gap-2">
+          Continuar
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/>
+          </svg>
+        </button>
       </div>
-    </section>
+    </div>
+  </main>
+</div>
 
-    <!-- ── LOGIN FASE 2: SELECCIÓN DE TIENDA / INTERLOCUTOR ─────── -->
-    <section id="view-interlocutor" class="view wrap hidden" style="padding-top:48px;">
-      <div style="text-align:center;margin-bottom:24px;">
-        <div style="font-size:1.3rem;font-weight:800;color:#642a72;">¿Dónde trabajas hoy?</div>
-        <div style="color:#6b7280;">Selecciona tu tienda o bodega</div>
+<!-- ══════════════════════════════════════════════════════════
+     VISTA: APP PRINCIPAL (post-login)
+══════════════════════════════════════════════════════════ -->
+<div id="view-app" class="view flex-col min-h-screen">
+
+  <!-- Navbar -->
+  <header class="bg-white border-b border-ink-200 shadow-sm sticky top-0 z-30" style="position:sticky;top:0;z-index:30">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4" style="position:relative">
+      <!-- Logo + nombre app: siempre visible -->
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="w-8 h-8 rounded-lg bg-brand flex items-center justify-center flex-shrink-0">
+          <span class="text-white font-bold text-xs">JP</span>
+        </div>
+        <div class="min-w-0">
+          <p class="text-sm font-semibold text-ink-900 leading-none truncate">JOSEPAN 360</p>
+          <!-- En móvil muestra sede; en desktop muestra "Albaranes de Compras [1002]" -->
+          <p id="hdr-sede-mobile" class="text-xs text-ink-500 leading-none mt-0.5 truncate sm:hidden">
+            <span id="hdr-sede-m">—</span>
+          </p>
+          <p class="text-xs text-ink-500 leading-none mt-0.5 hidden sm:block">
+            Albaranes de Compras [1002]
+          </p>
+        </div>
       </div>
-      <div class="card" style="padding:20px;">
-        <div class="field-label">Tienda / Interlocutor</div>
-        <select id="intc-select" class="sel"></select>
-        <div style="height:16px;"></div>
-        <button id="intc-confirm" class="btn-prim">Continuar</button>
+
+      <!-- Usuario + sede (desktop) + botón salir -->
+      <div class="flex items-center gap-3 flex-shrink-0">
+        <div class="text-right hidden sm:block">
+          <p id="hdr-nombre" class="text-sm font-medium text-ink-900 leading-none">—</p>
+          <p id="hdr-sede" class="text-xs text-ink-500 leading-none mt-0.5">—</p>
+        </div>
+        <!-- En móvil mostrar solo el nombre del usuario -->
+        <p id="hdr-nombre-mobile" class="text-xs font-medium text-ink-700 sm:hidden">—</p>
+        <button id="btn-logout"
+          class="flex items-center gap-1.5 text-xs font-medium text-ink-500 hover:text-danger
+                 bg-ink-100 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"/>
+          </svg>
+          <span class="hidden sm:inline">Salir</span>
+        </button>
+        <!-- Botón hamburguesa -->
+        <button id="btn-menu"
+          class="flex items-center justify-center w-9 h-9 rounded-lg text-ink-500
+                 hover:bg-ink-100 transition-colors flex-shrink-0"
+          aria-label="Menú">
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/>
+          </svg>
+        </button>
       </div>
-    </section>
+    </div>
+  </header>
 
-    <!-- ── HUB ──────────────────────────────────────────────────── -->
-    <section id="view-hub" class="view wrap hidden">
-      <h1 class="sec-title">Operaciones</h1>
-      <div id="hub-legend" class="hub-legend"></div>
-      <div id="hub-tiles" style="display:flex;flex-direction:column;gap:12px;"></div>
-    </section>
+  <!-- Menú desplegable — dropdown desde el botón hamburguesa -->
+  <div id="menu-dropdown" style="
+    display:none;position:absolute;top:56px;right:0;
+    background:#fff;border:1px solid #e2e8f0;border-radius:12px;
+    box-shadow:0 8px 24px rgba(0,0,0,0.12);min-width:220px;z-index:200;
+    overflow:hidden">
 
-    <!-- ── PANEL DE TRASPASOS (dashboard + KPIs) ────────────────── -->
-    <section id="view-dashboard" class="view wrap hidden">
-      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Panel de traspasos</h1>
-      <div id="dash-kpis" class="kpi-grid"></div>
-      <div id="dash-states" class="perm-card" style="margin-top:14px;"></div>
-      <div id="dash-list" style="margin-top:6px;"></div>
-    </section>
+    <!-- Usuario -->
+    <div style="padding:12px 16px;border-bottom:1px solid #f1f5f9">
+      <p id="menu-hdr-usuario" style="font-size:12px;color:#64748b;margin:0">—</p>
+    </div>
 
-    <!-- ── FLUJO 1: RECEPCIÓN CONTRA OC/ALBARÁN ─────────────────── -->
-    <section id="view-recepcion" class="view wrap hidden">
-      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Albaranes pendientes</h1>
-      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Selecciona un albarán/OC para recepcionar.</p>
-      <div id="recepcion-list"></div>
-    </section>
-
-    <section id="view-oc" class="view wrap hidden">
-      <button id="oc-back" class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 id="oc-title" class="sec-title">Albarán</h1>
-      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 14px;">Asocia ubicación y lote, confirma la cantidad recibida SKU por SKU.</p>
-      <div id="oc-grid" style="display:flex;flex-direction:column;gap:14px;"></div>
-      <div style="height:14px;"></div>
-      <button id="oc-save" class="btn-ok" disabled>Guardar y almacenar</button>
-    </section>
-
-    <!-- ── FLUJO 2: UBICACIÓN (Traslado Interno) ────────────────── -->
-    <section id="view-ubicar" class="view wrap hidden">
-      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Ubicación interna</h1>
-      <div class="cam-wrap hidden"><video id="ubicar-cam" muted></video></div>
-      <button id="ubicar-scan" class="btn-prim">Escanear ubicación destino (QR)</button>
-      <div class="card" style="padding:14px;margin-top:14px;">
-        <div class="field-label">Ubicación leída</div>
-        <div id="ubicar-loc" style="font-weight:700;">—</div>
+    <!-- Opciones -->
+    <button id="menu-btn-inicio" style="
+      width:100%;display:flex;align-items:center;gap:10px;padding:12px 16px;
+      border:none;background:transparent;cursor:pointer;text-align:left"
+      onmouseenter="this.style.background='#f8fafc'"
+      onmouseleave="this.style.background='transparent'">
+      <div style="width:32px;height:32px;border-radius:8px;background:rgba(100,42,114,0.1);
+        display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#642a72" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25Z"/>
+        </svg>
       </div>
-      <div class="field-label">Ubicación origen</div>
-      <select id="ubicar-origen" class="sel"></select>
-      <div class="field-label">Ubicación destino</div>
-      <select id="ubicar-dest" class="sel"></select>
-      <div class="field-label">Producto (SKU)</div>
-      <input id="ubicar-sku-q" class="txt" placeholder="Buscar SKU…" />
-      <div id="ubicar-sku-res" class="sku-res"></div>
-      <div class="field-label">Lote</div>
-      <select id="ubicar-batch" class="sel"></select>
-      <div class="field-label">Cantidad</div>
-      <div style="display:flex;gap:10px;">
-        <input id="ubicar-cant" class="num" inputmode="decimal" placeholder="0" />
-        <select id="ubicar-unidad" class="sel" style="max-width:120px;">
-          <option value="ud">ud</option><option value="kg">kg</option><option value="g">g</option>
-          <option value="l">L</option><option value="ml">ml</option>
-        </select>
+      <div>
+        <p style="font-size:13px;font-weight:600;color:#0f172a;margin:0">Registrar albarán</p>
+        <p style="font-size:11px;color:#94a3b8;margin:2px 0 0">Volver al formulario</p>
       </div>
-      <div style="height:14px;"></div>
-      <button id="ubicar-confirm" class="btn-ok">Trasladar a ubicación</button>
-    </section>
+    </button>
 
-    <!-- ── FLUJO 3A: SOLICITAR (crea transfer) ──────────────────── -->
-    <section id="view-solicitar" class="view wrap hidden">
-      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Solicitar traspaso</h1>
-      <div class="field-label">Origen (Obrador)</div>
-      <div class="ro-field" id="sol-origen-lbl">—</div>
-      <div class="field-label">Destino (tu tienda)</div>
-      <div class="ro-field" id="sol-dest-lbl">—</div>
-      <div class="field-label">Añadir ítem</div>
-      <input id="sol-sku-q" class="txt" placeholder="Buscar SKU…" />
-      <div id="sol-sku-res" class="sku-res"></div>
-      <div style="display:flex;gap:10px;margin-top:10px;">
-        <input id="sol-cant" class="num" inputmode="decimal" placeholder="Cant." />
-        <select id="sol-unidad" class="sel" style="max-width:120px;">
-          <option value="ud">ud</option><option value="kg">kg</option><option value="g">g</option>
-          <option value="l">L</option><option value="ml">ml</option>
-        </select>
-        <button id="sol-add" class="btn-prim-sm">Añadir</button>
+    <button id="menu-btn-permisos" style="
+      width:100%;display:flex;align-items:center;gap:10px;padding:12px 16px;
+      border:none;background:transparent;cursor:pointer;text-align:left"
+      onmouseenter="this.style.background='#f8fafc'"
+      onmouseleave="this.style.background='transparent'">
+      <div style="width:32px;height:32px;border-radius:8px;background:rgba(245,158,11,0.12);
+        display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#d97706" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"/>
+        </svg>
       </div>
-      <div id="sol-items" style="margin-top:14px;"></div>
-      <div class="field-label">Notas (opcional)</div>
-      <input id="sol-notes" class="txt" placeholder="Reposición tienda centro" />
-      <div style="height:12px;"></div>
-      <button id="sol-confirm" class="btn-ok">Enviar solicitud</button>
-    </section>
-
-    <!-- ── FLUJO 3B/C: PICKING ──────────────────────────────────── -->
-    <section id="view-picking" class="view wrap hidden">
-      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Solicitudes (SOLICITADO)</h1>
-      <div id="picking-list"></div>
-    </section>
-
-    <section id="view-alistar" class="view wrap hidden">
-      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 id="alistar-title" class="sec-title">Alistar traspaso</h1>
-      <div id="alistar-grid"></div>
-      <div id="alistar-obs-wrap" class="hidden">
-        <div class="field-label">Observaciones (obligatorio por faltante)</div>
-        <textarea id="alistar-obs" class="txt" placeholder="Justifica el quiebre de stock…"></textarea>
+      <div>
+        <p style="font-size:13px;font-weight:600;color:#0f172a;margin:0">Gestor de permisos</p>
+        <p style="font-size:11px;color:#94a3b8;margin:2px 0 0">Solo SuperAdmin</p>
       </div>
-      <div style="height:12px;"></div>
-      <button id="alistar-confirm" class="btn-ok">Marcar LISTO_DESPACHO</button>
-    </section>
+    </button>
 
-    <!-- ── FLUJO 3D: TRANSPORTE ─────────────────────────────────── -->
-    <section id="view-transporte" class="view wrap hidden">
-      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Ruta de transporte</h1>
-      <div id="transporte-list"></div>
-    </section>
-
-    <!-- ── FLUJO 3E: RECIBIR/CERRAR ─────────────────────────────── -->
-    <section id="view-recibir" class="view wrap hidden">
-      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Entregas por recibir</h1>
-      <div id="recibir-list"></div>
-    </section>
-
-    <section id="view-cierre" class="view wrap hidden">
-      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 id="cierre-title" class="sec-title">Recepción de traspaso</h1>
-      <div id="cierre-grid"></div>
-      <div id="cierre-obs-wrap" class="hidden">
-        <div class="field-label">Observaciones (obligatorio por diferencia)</div>
-        <textarea id="cierre-obs" class="txt" placeholder="Describe la diferencia…"></textarea>
+    <button id="menu-btn-historial" style="
+      width:100%;display:flex;align-items:center;gap:10px;padding:12px 16px;
+      border:none;background:transparent;cursor:pointer;text-align:left"
+      onmouseenter="this.style.background='#f8fafc'"
+      onmouseleave="this.style.background='transparent'">
+      <div style="width:32px;height:32px;border-radius:8px;background:rgba(16,185,129,0.1);
+        display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#10b981" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z"/>
+        </svg>
       </div>
-      <div style="height:12px;"></div>
-      <button id="cierre-confirm" class="btn-ok">Aceptar entrega y CERRAR</button>
-    </section>
-
-    <!-- ── FLUJO 4: MERMA ───────────────────────────────────────── -->
-    <section id="view-merma" class="view wrap hidden">
-      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Registrar merma</h1>
-      <div class="field-label">Ubicación</div>
-      <select id="merma-loc" class="sel"></select>
-      <div class="field-label">Producto (SKU)</div>
-      <input id="merma-sku-q" class="txt" placeholder="Buscar SKU…" />
-      <div id="merma-sku-res" class="sku-res"></div>
-      <div class="field-label">Lote</div>
-      <select id="merma-batch" class="sel"></select>
-      <div class="field-label">Cantidad</div>
-      <div style="display:flex;gap:10px;">
-        <input id="merma-cant" class="num" inputmode="decimal" placeholder="0" />
-        <select id="merma-unidad" class="sel" style="max-width:120px;">
-          <option value="ud">ud</option><option value="kg">kg</option><option value="g">g</option>
-          <option value="l">L</option><option value="ml">ml</option>
-        </select>
+      <div>
+        <p style="font-size:13px;font-weight:600;color:#0f172a;margin:0">Historial de albaranes</p>
+        <p style="font-size:11px;color:#94a3b8;margin:2px 0 0">Consultar registros</p>
       </div>
-      <div class="field-label">Razón</div>
-      <select id="merma-razon" class="sel">
-        <option value="">Selecciona…</option>
-        <option value="VENCIMIENTO">VENCIMIENTO</option>
-        <option value="DESPERFECTO">DESPERFECTO</option>
-      </select>
-      <div class="field-label">Observaciones (obligatorio)</div>
-      <textarea id="merma-obs" class="txt" placeholder="Justifica la baja del inventario…"></textarea>
-      <div class="field-label">Evidencia fotográfica (obligatoria)</div>
-      <div class="cam-wrap hidden"><video id="merma-cam" muted></video></div>
-      <img id="merma-foto-prev" class="hidden" style="width:100%;border-radius:14px;margin-bottom:12px;" alt="evidencia" />
-      <button id="merma-capture" class="btn-prim">Capturar fotografía</button>
-      <div style="height:10px;"></div>
-      <button id="merma-confirm" class="btn-ok" disabled>Registrar merma</button>
-    </section>
+    </button>
 
-    <!-- ── GESTOR DE PERMISOS (solo SuperAdmin) ─────────────────── -->
-    <section id="view-permisos" class="view wrap hidden">
-      <button data-back class="btn-ghost" style="margin-bottom:14px;">← Volver</button>
-      <h1 class="sec-title">Gestor de permisos</h1>
-      <p style="color:#6b7280;font-size:.9rem;margin:-6px 0 16px;">
-        Asocia cada pantalla del módulo de almacén a los roles operativos del
-        API CORE. El SuperAdmin siempre ve todas las pantallas.</p>
-      <div id="perm-groups" style="display:flex;flex-direction:column;gap:12px;"></div>
-      <div style="height:14px;"></div>
-      <button id="perm-save" class="btn-ok" disabled>Guardar permisos</button>
-    </section>
+    <!-- Separador + Salir -->
+    <div style="border-top:1px solid #f1f5f9">
+      <button id="menu-btn-logout" style="
+        width:100%;display:flex;align-items:center;gap:8px;padding:12px 16px;
+        border:none;background:transparent;cursor:pointer;
+        font-size:13px;font-weight:500;color:#ef4444"
+        onmouseenter="this.style.background='#fff1f2'"
+        onmouseleave="this.style.background='transparent'">
+        <svg width="15" height="15" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9"/>
+        </svg>
+        Cerrar sesión
+      </button>
+    </div>
+  </div>
+
+  <!-- Contenido -->
+  <main class="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- ── Steps ── -->
+    <div id="steps-bar" class="bg-white rounded-2xl border border-ink-200 p-5">
+      <div class="flex items-center gap-0">
+        <!-- Step 1 -->
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <div id="step1-circle"
+            class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+                   bg-brand text-white transition-colors">1</div>
+          <span id="step1-label" class="text-sm font-medium text-ink-900 hidden sm:block">Documento</span>
+        </div>
+        <div id="line-1-2" class="step-line mx-2 sm:mx-3"></div>
+        <!-- Step 2 -->
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <div id="step2-circle"
+            class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+                   bg-ink-200 text-ink-500 transition-colors">2</div>
+          <span id="step2-label" class="text-sm font-medium text-ink-400 hidden sm:block">Datos del albarán</span>
+        </div>
+        <div id="line-2-3" class="step-line mx-2 sm:mx-3"></div>
+        <!-- Step 3 -->
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <div id="step3-circle"
+            class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+                   bg-ink-200 text-ink-500 transition-colors">3</div>
+          <span id="step3-label" class="text-sm font-medium text-ink-400 hidden sm:block">Productos</span>
+        </div>
+        <div id="line-3-4" class="step-line mx-2 sm:mx-3"></div>
+        <!-- Step 4 -->
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <div id="step4-circle"
+            class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold
+                   bg-ink-200 text-ink-500 transition-colors">4</div>
+          <span id="step4-label" class="text-sm font-medium text-ink-400 hidden sm:block">Confirmar</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PASO 1: Modo de entrada ── -->
+    <div id="step-1" class="bg-white rounded-2xl border border-ink-200 overflow-hidden">
+      <div class="px-6 py-5 border-b border-ink-100">
+        <h2 class="text-base font-semibold text-ink-900">¿Cómo quieres registrar el albarán?</h2>
+        <p class="text-sm text-ink-500 mt-0.5">Elige el método de entrada de datos</p>
+      </div>
+      <div class="p-6 space-y-4">
+
+        <!-- Selector de modo -->
+        <div id="modo-selector" class="grid grid-cols-2 gap-4">
+          <!-- Opción A: Imagen/OCR -->
+          <button id="btn-modo-imagen"
+            class="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-brand
+                   bg-brand/5 text-left transition-all hover:border-brand group">
+            <div class="w-12 h-12 rounded-xl flex items-center justify-center"
+              style="background:#642a72">
+              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 0 1 5.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 0 0-1.134-.175 2.31 2.31 0 0 1-1.64-1.055l-.822-1.316a2.192 2.192 0 0 0-1.736-1.039 48.774 48.774 0 0 0-5.232 0 2.192 2.192 0 0 0-1.736 1.039l-.821 1.316Z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0Z"/>
+              </svg>
+            </div>
+            <div>
+              <p class="text-sm font-bold text-ink-900">Fotografiar albarán</p>
+              <p class="text-xs text-ink-500 mt-0.5 leading-snug">
+                El sistema extrae los datos automáticamente con IA
+              </p>
+            </div>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full"
+              style="background:#642a72;color:white">RECOMENDADO</span>
+          </button>
+
+          <!-- Opción B: Manual -->
+          <button id="btn-modo-manual"
+            class="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-ink-200
+                   text-left transition-all hover:border-brand hover:bg-ink-50 group">
+            <div class="w-12 h-12 rounded-xl bg-ink-100 flex items-center justify-center">
+              <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#64748b" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"/>
+              </svg>
+            </div>
+            <div>
+              <p class="text-sm font-bold text-ink-900">Ingresar manualmente</p>
+              <p class="text-xs text-ink-500 mt-0.5 leading-snug">
+                Introduce los datos del proveedor y productos uno a uno
+              </p>
+            </div>
+          </button>
+        </div>
+
+        <!-- Panel imagen (visible solo en modo imagen) -->
+        <div id="panel-modo-imagen" class="space-y-4">
+          <label id="drop-zone"
+            class="flex flex-col items-center justify-center gap-3 min-h-[160px]
+                   border-2 border-dashed border-ink-300 rounded-xl cursor-pointer
+                   hover:border-brand hover:bg-brand/5 transition-colors text-center p-6">
+            <div id="dz-idle">
+              <div class="w-12 h-12 rounded-full bg-ink-100 flex items-center justify-center mx-auto mb-3">
+                <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="#64748b" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5"/>
+                </svg>
+              </div>
+              <p class="text-sm font-medium text-ink-700">Toca o arrastra el documento aquí</p>
+              <p class="text-xs text-ink-400 mt-1">Foto de cámara · PDF · PNG · JPG</p>
+            </div>
+            <div id="dz-preview" class="hidden w-full">
+              <img id="prev-img" class="hidden max-h-48 mx-auto rounded-lg object-contain" alt="" />
+              <div id="prev-pdf" class="hidden flex items-center gap-3 justify-center">
+                <svg width="32" height="32" fill="#ef4444" viewBox="0 0 24 24">
+                  <path d="M7 18H17V16H7v2zm10-8H7v2h10v-2zm-4-6H5c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H19c1.1 0 2-.9 2-2V8l-6-6zm4 18H5V4h7v5h5v13z"/>
+                </svg>
+                <div class="text-left">
+                  <p id="prev-nom" class="text-sm font-medium text-ink-800">documento.pdf</p>
+                  <p class="text-xs text-ink-500">PDF adjunto correctamente</p>
+                </div>
+              </div>
+            </div>
+            <input id="file-input" type="file" accept="image/*,application/pdf" capture="environment" class="hidden" />
+          </label>
+          <div id="ocr-panel" class="hidden"></div>
+          <button id="btn-clear-doc" class="hidden text-sm text-danger hover:underline">
+            Eliminar documento
+          </button>
+        </div>
+
+        <!-- Botón continuar -->
+        <div class="flex justify-end pt-1">
+          <button id="btn-step1-next" disabled
+            class="flex items-center gap-2 bg-brand hover:bg-brand-light disabled:opacity-40
+                   disabled:cursor-not-allowed text-white font-medium text-sm py-2.5 px-5 rounded-lg transition-colors">
+            Continuar
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PASO 2: Datos cabecera ── -->
+    <div id="step-2" class="hidden bg-white rounded-2xl border border-ink-200 overflow-hidden">
+      <div class="px-6 py-5 border-b border-ink-100">
+        <h2 class="text-base font-semibold text-ink-900">Datos del albarán</h2>
+        <p class="text-sm text-ink-500 mt-0.5">Identifica el documento y el proveedor</p>
+      </div>
+      <div class="p-6 space-y-5">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5" for="inp-num-albaran">
+              N.º de albarán <span class="text-danger">*</span>
+            </label>
+            <input id="inp-num-albaran" type="text" placeholder="ALB-2026-001"
+              autocomplete="off" spellcheck="false"
+              class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                     focus:border-brand transition-colors font-mono" />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5" for="inp-fecha-recepcion">
+              Fecha de recepción <span class="text-danger">*</span>
+            </label>
+            <input id="inp-fecha-recepcion" type="date"
+              class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                     focus:border-brand transition-colors" />
+            <p class="text-xs text-ink-400 mt-1">Fecha en que se recibió físicamente la mercancía</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5" for="sel-proveedor">
+              Proveedor <span class="text-danger">*</span>
+            </label>
+            <div class="relative">
+              <select id="sel-proveedor"
+                class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                       focus:border-brand transition-colors appearance-none bg-white pr-8">
+                <option value="">— Seleccionar —</option>
+              </select>
+              <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400 pointer-events-none"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-ink-700 mb-1.5" for="sel-ubicacion">
+              Bodega / Sede destino
+            </label>
+            <div class="relative">
+              <select id="sel-ubicacion"
+                class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                       focus:border-brand transition-colors appearance-none bg-white pr-8">
+                <option value="">— Seleccionar —</option>
+              </select>
+              <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400 pointer-events-none"
+                fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+              </svg>
+            </div>
+            <p class="text-xs text-ink-400 mt-1">Por defecto: tu fábrica principal</p>
+          </div>
+        </div>
+
+        <div class="flex justify-between gap-3 pt-2">
+          <button id="btn-step2-back"
+            class="text-sm font-medium text-ink-500 hover:text-ink-800 flex items-center gap-1.5 transition-colors">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"/>
+            </svg>
+            Atrás
+          </button>
+          <button id="btn-step2-next"
+            class="flex items-center gap-2 bg-brand hover:bg-brand-light text-white font-medium
+                   text-sm py-2.5 px-5 rounded-lg transition-colors">
+            Añadir productos
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── PASO 3: Productos ── -->
+    <div id="step-3" class="hidden space-y-4">
+
+
+      <!-- Panel líneas OCR — revisión y match con catálogo OMNI -->
+      <div id="ocr-lineas-panel" class="hidden bg-white rounded-2xl border border-brand/20 overflow-hidden">
+        <!-- Header -->
+        <div class="px-5 py-4 bg-brand/5 border-b border-brand/20">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <p class="text-sm font-semibold text-brand flex items-center gap-2">
+                <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+                </svg>
+                Productos detectados en el albarán
+              </p>
+              <p class="text-xs text-ink-500 mt-0.5">
+                Revisa las cantidades y fechas · Los productos con ✓ se añaden al inventario
+              </p>
+            </div>
+            <button id="btn-ocr-lineas-skip"
+              class="text-xs text-ink-400 hover:text-ink-700 underline whitespace-nowrap flex-shrink-0 mt-0.5">
+              Introducir manualmente
+            </button>
+          </div>
+          <!-- Barra de progreso de match -->
+          <div id="ocr-match-stats" class="mt-3 flex items-center gap-3 text-xs">
+            <span id="ocr-stat-match" class="inline-flex items-center gap-1 font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+              <span class="ocr-num">0</span> con match
+            </span>
+            <span id="ocr-stat-nomatch" class="inline-flex items-center gap-1 font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+              <span class="ocr-num">0</span> sin match
+            </span>
+            <span id="ocr-stat-added" class="inline-flex items-center gap-1 font-medium text-ink-600 bg-ink-100 px-2 py-0.5 rounded-full">
+              <span class="ocr-num">0</span> añadidos
+            </span>
+          </div>
+        </div>
+
+        <!-- Lista de líneas -->
+        <div id="ocr-lineas-body" class="divide-y divide-ink-100"></div>
+
+        <!-- Footer con acción masiva -->
+        <div id="ocr-lineas-footer" class="px-5 py-3 bg-ink-50 border-t border-ink-200 flex items-center justify-between gap-3">
+          <p class="text-xs text-ink-500">Los productos sin match requieren acción manual antes de continuar.</p>
+          <button id="btn-ocr-add-all"
+            class="flex items-center gap-2 bg-ok hover:bg-emerald-600 text-white text-xs font-semibold
+                   px-4 py-2 rounded-lg transition-colors disabled:opacity-40"
+            disabled>
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+            </svg>
+            Añadir todos con match
+          </button>
+        </div>
+      </div>
+
+      <!-- Escáner EAN -->
+      <div class="bg-white rounded-2xl border border-ink-200">
+        <div class="px-6 py-5 border-b border-ink-100 flex items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-semibold text-ink-900">Escanear producto</h2>
+            <p class="text-sm text-ink-500 mt-0.5">EAN-13 con pistola lectora o búsqueda por nombre</p>
+          </div>
+          <span id="item-count-badge"
+            class="hidden bg-brand text-white text-xs font-bold px-2.5 py-1 rounded-full">0</span>
+        </div>
+        <div class="p-6 space-y-3">
+          <div class="relative z-40" id="ean-wrap">
+            <input id="input-ean" type="text" inputmode="text"
+              placeholder="Escanear EAN-13 o escribir nombre del producto…"
+              autocomplete="off" spellcheck="false"
+              class="w-full px-3.5 py-2.5 pr-12 rounded-lg border border-ink-300 text-sm text-ink-900
+                     focus:border-brand transition-colors font-mono" />
+            <button id="btn-scan"
+              class="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 bg-brand hover:bg-brand-light
+                     rounded-lg flex items-center justify-center transition-colors">
+              <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z"/>
+              </svg>
+            </button>
+            <!-- Dropdown búsqueda predictiva — fixed para escapar de cualquier overflow -->
+            <div id="ean-dropdown"
+              class="hidden fixed z-50 bg-white border border-ink-200
+                     rounded-xl max-h-56 overflow-y-auto">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel de registro (aparece al reconocer un SKU existente) -->
+      <div id="conv-panel" class="hidden bg-white rounded-2xl border border-brand/30">
+        <!-- Header: datos del SKU -->
+        <div class="px-5 py-3.5 bg-brand/5 border-b border-brand/20 flex items-start justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-[10px] font-bold text-brand uppercase tracking-widest mb-0.5">✓ Producto reconocido</p>
+            <p id="conv-nombre" class="text-sm font-bold text-ink-900 leading-snug">—</p>
+            <p id="conv-meta" class="text-[11px] text-ink-400 mt-0.5 font-mono">—</p>
+          </div>
+          <button id="btn-conv-cancel" class="flex-shrink-0 text-ink-300 hover:text-danger transition-colors p-0.5">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Campos: cantidad · lote · vencimiento -->
+        <div class="px-5 py-4">
+          <!-- Campos ocultos de contexto -->
+          <input id="hid-sku-id"   type="hidden" />
+          <input id="hid-sku-ean"  type="hidden" />
+          <input id="hid-sku-ub"   type="hidden" />
+          <input id="hid-sku-name" type="hidden" />
+          <input id="hid-sku-ps"   type="hidden" value="1" />
+          <select id="sel-uc" class="hidden" aria-hidden="true"></select>
+
+          <div class="grid grid-cols-3 gap-3">
+            <!-- Cantidad -->
+            <div>
+              <label class="block text-[10px] font-bold text-ink-500 uppercase tracking-wide mb-1.5" for="inp-qty">
+                Cantidad<span id="conv-qty-label" class="ml-1 font-normal text-brand normal-case"></span>
+                <span class="text-danger"> *</span>
+              </label>
+              <input id="inp-qty" type="number" inputmode="numeric" min="1" step="1" placeholder="0"
+                class="w-full px-2 py-2 rounded-lg border-2 border-ink-200 text-2xl font-mono font-black
+                       text-ink-900 text-center focus:border-brand focus:outline-none transition-colors" />
+              <p id="conv-peso-total" class="hidden text-[10px] text-center text-ink-400 mt-1 font-mono leading-tight"></p>
+            </div>
+
+            <!-- Lote -->
+            <div>
+              <label class="block text-[10px] font-bold text-ink-500 uppercase tracking-wide mb-1.5" for="inp-lote">
+                Código de lote <span class="text-ink-300 text-[9px] font-normal">(opcional)</span>
+              </label>
+              <input id="inp-lote" type="text" placeholder="Ej: 06926"
+                autocomplete="off" spellcheck="false"
+                class="w-full px-3 py-2 rounded-lg border border-ink-300 text-sm font-mono
+                       text-ink-900 focus:border-brand focus:outline-none transition-colors" />
+            </div>
+          </div>
+
+          <!-- Fila 2: precio unitario + descuento -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[10px] font-bold text-ink-500 uppercase tracking-wide mb-1.5" for="inp-precio">
+                Precio unitario (€)
+              </label>
+              <input id="inp-precio" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"
+                class="w-full px-3 py-2 rounded-lg border border-ink-300 text-sm font-mono
+                       text-ink-900 focus:border-brand focus:outline-none transition-colors" />
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold text-ink-500 uppercase tracking-wide mb-1.5" for="inp-dto">
+                Descuento (%)
+              </label>
+              <input id="inp-dto" type="number" inputmode="decimal" min="0" max="100" step="0.01" placeholder="0"
+                class="w-full px-3 py-2 rounded-lg border border-ink-300 text-sm font-mono
+                       text-ink-900 focus:border-brand focus:outline-none transition-colors" />
+            </div>
+          </div>
+
+
+
+            <!-- Vencimiento -->
+            <div>
+              <label class="block text-[10px] font-bold text-ink-500 uppercase tracking-wide mb-1.5" for="inp-vence">
+                Vencimiento <span class="text-ink-300 text-[9px] font-normal">(opcional)</span>
+              </label>
+              <input id="inp-vence" type="date"
+                class="w-full px-3 py-2 rounded-lg border border-ink-300 text-sm
+                       text-ink-900 focus:border-brand focus:outline-none transition-colors" />
+            </div>
+          </div>
+
+          <button id="btn-add-item"
+            class="mt-4 w-full bg-ok hover:bg-emerald-600 text-white font-bold text-sm
+                   py-2.5 px-4 rounded-xl transition-colors flex items-center justify-center gap-2">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+            </svg>
+            Añadir al albarán
+          </button>
+        </div>
+      </div>
+
+      <!-- Tabla de ítems -->
+      <div id="items-table-wrap" class="hidden bg-white rounded-2xl border border-ink-200 overflow-hidden">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-ink-100">
+          <div>
+            <h3 class="text-sm font-semibold text-ink-900">Líneas del albarán</h3>
+            <p class="text-xs text-ink-500 mt-0.5"><span id="items-count">0</span> producto(s) añadido(s)</p>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full tbl min-w-[560px]">
+            <thead>
+              <tr>
+                <th class="text-left">Producto</th>
+                <th class="text-right">Cant. base</th>
+                <th class="text-right">Precio/u</th>
+                <th class="text-right">Dto %</th>
+                <th class="text-left">Lote</th>
+                <th class="text-left">Vencimiento</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="items-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Botones paso 3 -->
+      <div class="flex justify-between gap-3">
+        <button id="btn-step3-back"
+          class="text-sm font-medium text-ink-500 hover:text-ink-800 flex items-center gap-1.5 transition-colors">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"/>
+          </svg>
+          Atrás
+        </button>
+        <button id="btn-step3-next" disabled
+          class="flex items-center gap-2 bg-brand hover:bg-brand-light disabled:opacity-40
+                 disabled:cursor-not-allowed text-white font-medium text-sm py-2.5 px-5 rounded-lg transition-colors">
+          Revisar y confirmar
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- ── PASO 4: Resumen y confirmación ── -->
+    <div id="step-4" class="hidden space-y-4">
+      <div class="bg-white rounded-2xl border border-ink-200 overflow-hidden">
+        <div class="px-6 py-5 border-b border-ink-100">
+          <h2 class="text-base font-semibold text-ink-900">Resumen del albarán</h2>
+          <p class="text-sm text-ink-500 mt-0.5">Revisa todo antes de registrar en el sistema</p>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
+            <div class="bg-ink-50 rounded-xl p-4">
+              <p class="text-xs font-medium text-ink-500 uppercase tracking-wide mb-1">N.º Albarán</p>
+              <p id="sum-num-albaran" class="font-semibold text-ink-900 font-mono">—</p>
+            </div>
+            <div class="bg-ink-50 rounded-xl p-4">
+              <p class="text-xs font-medium text-ink-500 uppercase tracking-wide mb-1">Proveedor</p>
+              <p id="sum-proveedor" class="font-semibold text-ink-900">—</p>
+            </div>
+            <div class="bg-ink-50 rounded-xl p-4">
+              <p class="text-xs font-medium text-ink-500 uppercase tracking-wide mb-1">Bodega destino</p>
+              <p id="sum-ubicacion" class="font-semibold text-ink-900">—</p>
+            </div>
+          </div>
+
+          <!-- Tabla resumen ítems -->
+          <div class="rounded-xl border border-ink-200 overflow-hidden">
+            <table class="w-full tbl min-w-[480px]">
+              <thead>
+                <tr>
+                  <th class="text-left">Producto</th>
+                  <th class="text-right">Cant. base</th>
+                  <th class="text-left">Vencimiento</th>
+                </tr>
+              </thead>
+              <tbody id="summary-tbody"></tbody>
+            </table>
+          </div>
+
+          <!-- Imagen adjunta -->
+          <div id="sum-doc-wrap" class="hidden">
+            <p class="text-xs font-medium text-ink-500 uppercase tracking-wide mb-2">Documento adjunto</p>
+            <img id="sum-doc-img" class="hidden max-h-32 rounded-lg border border-ink-200 object-contain" alt="" />
+            <div id="sum-doc-pdf" class="hidden flex items-center gap-2 text-sm text-ink-700 bg-ink-50 rounded-lg px-3 py-2">
+              <svg width="18" height="18" fill="#ef4444" viewBox="0 0 24 24">
+                <path d="M7 18H17V16H7v2zm10-8H7v2h10v-2zm-4-6H5c-1.1 0-2 .9-2 2v16c0 1.1.89 2 1.99 2H19c1.1 0 2-.9 2-2V8l-6-6zm4 18H5V4h7v5h5v13z"/>
+              </svg>
+              <span id="sum-doc-nom">documento.pdf</span>
+            </div>
+          </div>
+
+          <!-- Error de registro -->
+          <div id="confirm-error" class="hidden bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+            <div class="flex items-start justify-between gap-3">
+              <p class="text-sm font-medium text-danger" id="confirm-error-msg">—</p>
+              <button id="btn-nuevo-desde-error"
+                class="flex-shrink-0 text-xs font-semibold text-brand hover:underline whitespace-nowrap mt-0.5">
+                + Nuevo albarán
+              </button>
+            </div>
+          </div>
+
+          <!-- Botones -->
+          <div class="flex justify-between gap-3 pt-2">
+            <button id="btn-step4-back"
+              class="text-sm font-medium text-ink-500 hover:text-ink-800 flex items-center gap-1.5 transition-colors">
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18"/>
+              </svg>
+              Corregir
+            </button>
+            <button id="btn-confirm"
+              class="flex items-center gap-2 bg-ok hover:bg-emerald-600 text-white font-semibold
+                     text-sm py-2.5 px-6 rounded-lg transition-colors">
+              <span id="btn-confirm-label">Registrar albarán</span>
+              <svg id="btn-confirm-spin" class="spin hidden w-4 h-4" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Pantalla de éxito ── -->
+    <!-- ── PASO: ÉXITO ── -->
+    <div id="step-success" class="hidden space-y-4">
+
+      <!-- Cabecera de confirmación -->
+      <div class="bg-white rounded-2xl border border-ink-200 overflow-hidden">
+        <div class="px-6 py-8 text-center border-b border-ink-100"
+          style="background:linear-gradient(135deg,#f0fdf4 0%,#dcfce7 100%)">
+          <div class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4"
+            style="background:#10b981">
+            <svg width="32" height="32" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/>
+            </svg>
+          </div>
+          <h2 class="text-xl font-bold text-ink-900 mb-1">¡Albarán registrado con éxito!</h2>
+          <p id="success-msg" class="text-sm text-ink-500">—</p>
+        </div>
+
+        <!-- Metadatos del albarán registrado -->
+        <div class="grid grid-cols-3 divide-x divide-ink-100 text-center">
+          <div class="px-4 py-4">
+            <p class="text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1">N.º Albarán</p>
+            <p id="sum-ok-albaran" class="text-sm font-bold text-ink-900 font-mono">—</p>
+          </div>
+          <div class="px-4 py-4">
+            <p class="text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1">Proveedor</p>
+            <p id="sum-ok-proveedor" class="text-sm font-semibold text-ink-900 truncate">—</p>
+          </div>
+          <div class="px-4 py-4">
+            <p class="text-[10px] font-bold text-ink-400 uppercase tracking-widest mb-1">Sede destino</p>
+            <p id="sum-ok-sede" class="text-sm font-semibold text-ink-900 truncate">—</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detalle de productos registrados -->
+      <div class="bg-white rounded-2xl border border-ink-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-ink-100 flex items-center justify-between">
+          <div>
+            <h3 class="text-sm font-semibold text-ink-900">Productos ingresados al inventario</h3>
+            <p id="sum-ok-count" class="text-xs text-ink-500 mt-0.5">—</p>
+          </div>
+          <span class="text-xs font-medium px-3 py-1 rounded-full"
+            style="background:#dcfce7;color:#166534">
+            En kardex ✓
+          </span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full tbl" style="min-width:480px">
+            <thead>
+              <tr>
+                <th class="text-left">Producto</th>
+                <th class="text-right">Cantidad</th>
+                <th class="text-left">Lote</th>
+                <th class="text-left">Vencimiento</th>
+                <th class="text-right">Precio/u</th>
+              </tr>
+            </thead>
+            <tbody id="success-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Acciones -->
+      <div class="flex gap-3 justify-center pb-4">
+        <button id="btn-nuevo"
+          class="flex items-center gap-2 bg-brand text-white font-semibold text-sm
+                 py-2.5 px-6 rounded-lg transition-colors">
+          <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/>
+          </svg>
+          Registrar otro albarán
+        </button>
+      </div>
+    </div>
+
+  
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: CREAR NUEVO PROVEEDOR
+══════════════════════════════════════════════════════════ -->
+<div id="modal-proveedor"
+  class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+  style="background:rgba(15,23,42,0.6);backdrop-filter:blur(3px);">
+  <div class="bg-white rounded-2xl shadow-2xl border border-ink-200 w-full max-w-lg overflow-hidden">
+    <!-- Header -->
+    <div class="flex items-center justify-between px-6 py-4 border-b border-ink-100">
+      <div>
+        <h3 class="text-base font-semibold text-ink-900">Crear nuevo proveedor</h3>
+        <p class="text-xs text-ink-500 mt-0.5">Se registrará como distribuidor en el sistema OMNI</p>
+      </div>
+      <button id="btn-modal-prov-cancel"
+        class="text-ink-400 hover:text-ink-700 transition-colors p-1 rounded-lg">
+        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Cuerpo -->
+    <div class="px-6 py-5 space-y-4 max-h-[70vh] overflow-y-auto">
+      <p id="modal-prov-error"
+        class="hidden text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></p>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">
+            Razón social <span class="text-danger">*</span>
+          </label>
+          <input id="inp-prov-nombre" type="text" placeholder="El Duo Harinero S.A."
+            autocomplete="off"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                   focus:border-brand transition-colors" />
+        </div>
+
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">Nombre comercial</label>
+          <input id="inp-prov-comercial" type="text" placeholder="El Duo Harinero (dejar vacío para usar razón social)"
+            autocomplete="off"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                   focus:border-brand transition-colors" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">NIF / CIF</label>
+          <input id="inp-prov-nif" type="text" placeholder="A28375913"
+            autocomplete="off" spellcheck="false"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm font-mono
+                   text-ink-900 focus:border-brand transition-colors" />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">Teléfono</label>
+          <input id="inp-prov-telefono" type="tel" placeholder="91 778 8411"
+            autocomplete="off"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                   focus:border-brand transition-colors" />
+        </div>
+
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">Email</label>
+          <input id="inp-prov-email" type="email" placeholder="comercial@duoharinero.com"
+            autocomplete="off"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                   focus:border-brand transition-colors" />
+        </div>
+
+        <div class="sm:col-span-2">
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">Dirección</label>
+          <input id="inp-prov-direccion" type="text" placeholder="Camino de Hormigueras, 108 — 28031 Madrid"
+            autocomplete="off"
+            class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                   focus:border-brand transition-colors" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex justify-end gap-3 px-6 py-4 border-t border-ink-100 bg-ink-50">
+      <button id="btn-modal-prov-cancel2"
+        class="text-sm font-medium text-ink-600 hover:text-ink-900 px-4 py-2.5 rounded-lg
+               border border-ink-300 hover:border-ink-400 bg-white transition-colors">
+        Cancelar
+      </button>
+      <button id="btn-modal-prov-save"
+        class="flex items-center gap-2 bg-brand hover:bg-brand-light text-white
+               font-medium text-sm py-2.5 px-5 rounded-lg transition-colors">
+        Crear proveedor
+      </button>
+    </div>
+  </div>
+</div>
+
+  
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: CREAR NUEVO SKU
+══════════════════════════════════════════════════════════ -->
+<div id="modal-crear-sku"
+  class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+  style="background:rgba(15,23,42,0.6);backdrop-filter:blur(3px);">
+  <div class="bg-white rounded-2xl shadow-2xl border border-ink-200 w-full max-w-md overflow-hidden">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-ink-100">
+      <div>
+        <h3 class="text-base font-semibold text-ink-900">Crear nuevo SKU</h3>
+        <p class="text-xs text-ink-500 mt-0.5">El producto no existe en el catálogo OMNI — créalo ahora</p>
+      </div>
+      <button id="btn-crear-sku-cancel"
+        class="text-ink-400 hover:text-ink-700 transition-colors p-1 rounded-lg">
+        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="px-6 py-5 space-y-4">
+      <p id="modal-sku-error"
+        class="hidden text-sm text-danger bg-red-50 border border-red-200 rounded-lg px-3.5 py-2.5"></p>
+
+      <div>
+        <label class="block text-sm font-medium text-ink-700 mb-1.5">
+          Nombre del producto <span class="text-danger">*</span>
+        </label>
+        <input id="inp-sku-nombre" type="text" placeholder="Ej: PANKO ESCAMAS T JAPONES 2KG"
+          autocomplete="off"
+          class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                 focus:border-brand transition-colors" />
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">
+            Unidad base <span class="text-danger">*</span>
+          </label>
+          <div class="relative">
+            <select id="sel-sku-ub"
+              class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                     focus:border-brand appearance-none bg-white pr-8">
+              <option value="g">Gramos (g)</option>
+              <option value="ml">Mililitros (ml)</option>
+              <option value="ud">Unidades (ud)</option>
+            </select>
+            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400 pointer-events-none"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-ink-700 mb-1.5">
+            Tipo <span class="text-danger">*</span>
+          </label>
+          <div class="relative">
+            <select id="sel-sku-tipo"
+              class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm text-ink-900
+                     focus:border-brand appearance-none bg-white pr-8">
+              <option value="MP">MP — Materia Prima</option>
+              <option value="PT">PT — Producto Terminado</option>
+              <option value="SV">SV — Servicio</option>
+              <option value="IN">IN — Insumo</option>
+            </select>
+            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-400 pointer-events-none"
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-ink-700 mb-1.5">Referencia proveedor</label>
+        <input id="inp-sku-ref" type="text" placeholder="Ej: 01336"
+          autocomplete="off" spellcheck="false"
+          class="w-full px-3.5 py-2.5 rounded-lg border border-ink-300 text-sm font-mono
+                 text-ink-900 focus:border-brand transition-colors" />
+      </div>
+    </div>
+    <div class="flex justify-end gap-3 px-6 py-4 border-t border-ink-100 bg-ink-50">
+      <button id="btn-crear-sku-cancel2"
+        class="text-sm font-medium text-ink-600 hover:text-ink-900 px-4 py-2.5 rounded-lg
+               border border-ink-300 hover:border-ink-400 bg-white transition-colors">
+        Cancelar
+      </button>
+      <button id="btn-crear-sku-save"
+        class="flex items-center gap-2 bg-brand hover:bg-brand-light text-white
+               font-medium text-sm py-2.5 px-5 rounded-lg transition-colors">
+        Crear SKU
+      </button>
+    </div>
+  </div>
+</div>
+
+
+
+  <!-- ── VISTA: HISTORIAL DE ALBARANES ── -->
 
   </main>
+</div>
 
-  <!-- ── NUMPAD ─────────────────────────────────────────────────── -->
-  <div id="numpad" class="hidden">
-    <div class="numpad-sheet">
-      <div style="display:flex;justify-content:space-between;align-items:center;">
-        <span style="font-weight:700;color:#6b7280;">Cantidad</span>
-        <button id="numpad-close" class="btn-del-sm" style="border:0;">Cerrar</button>
+<script>
+  // Botón secundario de cancelar modal proveedor
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('btn-modal-prov-cancel2')?.addEventListener('click', () => {
+      document.getElementById('modal-proveedor').classList.add('hidden');
+      document.getElementById('sel-proveedor').value = '';
+    });
+  });
+</script>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL: DETALLE OCR RAW
+══════════════════════════════════════════════════════════ -->
+<div id="modal-ocr-raw"
+  class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+  style="background:rgba(15,23,42,0.6);backdrop-filter:blur(3px);">
+  <div class="bg-white rounded-2xl shadow-2xl border border-ink-200 w-full max-w-lg overflow-hidden">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-ink-100">
+      <div>
+        <h3 class="text-base font-semibold text-ink-900">Datos extraídos del documento</h3>
+        <p class="text-xs text-ink-500 mt-0.5">JSON completo devuelto por el análisis IA</p>
       </div>
-      <div id="numpad-display">0</div>
-      <div class="numpad-grid">
-        <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
-        <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
-        <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
-        <button data-k=".">.</button><button data-k="0">0</button><button data-k="del">⌫</button>
-        <button data-k="ok" class="k-ok">Aceptar</button>
-      </div>
+      <button id="btn-modal-ocr-close"
+        class="text-ink-400 hover:text-ink-700 transition-colors p-1 rounded-lg">
+        <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <div class="p-6 max-h-[65vh] overflow-y-auto">
+      <pre id="ocr-raw-content"
+        class="text-xs font-mono bg-ink-50 rounded-lg p-4 overflow-x-auto text-ink-700 whitespace-pre-wrap"></pre>
     </div>
   </div>
+</div>
 
-  <!-- ── PARADA DE EMERGENCIA ───────────────────────────────────── -->
-  <div id="view-emergency" class="hidden">
-    <h2>⛔ PARADA DE EMERGENCIA</h2>
-    <p id="emg-msg" style="margin:14px 0 24px;max-width:420px;"></p>
-    <p style="opacity:.9;margin-bottom:24px;max-width:420px;">La cola se detuvo para proteger el Kardex. Requiere intervención manual.</p>
-    <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:360px;">
-      <button id="emg-resume" class="btn-ghost">Reintentar (corregí el origen)</button>
-      <button id="emg-discard" class="btn-prim" style="background:#fff;color:#b91c1c;">Descartar transacción y continuar</button>
+
+<!-- ══════════════════════════════════════════════════════════
+     VISTA SPA: GESTOR DE PERMISOS (nivel raíz, solo SuperAdmin)
+══════════════════════════════════════════════════════════ -->
+<div id="view-permisos" class="view flex-col min-h-screen">
+
+  <!-- Header -->
+  <header style="background:#642a72;color:#fff;padding:0 16px;height:56px;
+    display:flex;align-items:center;justify-content:space-between;
+    position:sticky;top:0;z-index:30">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,0.2);
+        display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">JP</div>
+      <div>
+        <p style="font-size:13px;font-weight:700;margin:0;line-height:1.2">JOSEPAN 360</p>
+        <p style="font-size:10px;margin:0;opacity:0.75">Gestor de permisos · [1002]</p>
+      </div>
     </div>
-  </div>
+    <button id="btn-permisos-volver"
+      style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.15);
+        border:none;color:#fff;font-size:12px;font-weight:600;padding:6px 12px;
+        border-radius:8px;cursor:pointer">
+      ← Volver
+    </button>
+  </header>
 
-  <!-- ── TOAST ──────────────────────────────────────────────────── -->
-  <div id="toast" class="hidden" data-type="ok"></div>
+  <main style="flex:1;max-width:640px;width:100%;margin:0 auto;padding:20px 16px">
 
-  <footer class="wrap" style="text-align:center;color:#9ca3af;font-size:.75rem;padding:24px 16px;">
-    JOSEPAN 360 · OMNI · [1003] © <span id="year"></span>
-  </footer>
+    <!-- Título -->
+    <div style="margin-bottom:20px">
+      <h2 style="font-size:18px;font-weight:700;color:#0f172a;margin:0 0 4px">Gestor de permisos</h2>
+      <p style="font-size:13px;color:#64748b;margin:0">
+        Asocia cada pantalla del módulo a los roles operativos del API CORE.
+        El SuperAdmin siempre ve todas las pantallas.
+      </p>
+    </div>
 
-  <!-- ── SCRIPTS (orden de dependencias) ────────────────────────── -->
-  <script src="js/api-client.js"></script>
-  <script src="js/metrology.js"></script>
-  <script src="js/scanner.js"></script>
-  <script src="js/outbox-service.js"></script>
-  <script src="js/app.js"></script>
+    <!-- Estado: cargando -->
+    <div id="permisos-loading" style="background:#fff;border:1px solid #e2e8f0;border-radius:16px;
+      padding:40px;text-align:center">
+      <svg style="width:24px;height:24px;margin:0 auto 8px;color:#642a72;animation:spin 0.7s linear infinite"
+        fill="none" viewBox="0 0 24 24">
+        <circle style="opacity:0.25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path style="opacity:0.75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+      </svg>
+      <p style="font-size:12px;color:#94a3b8;margin:0">Cargando permisos…</p>
+    </div>
+
+    <!-- Cards de pantallas -->
+    <div id="permisos-cards" style="display:none"></div>
+
+    <!-- Botón guardar -->
+    <div id="permisos-footer" style="display:none;margin-top:16px;text-align:right">
+      <p id="permisos-save-msg" style="display:none;font-size:13px;color:#10b981;
+        font-weight:600;margin:0 0 8px">✓ Guardado correctamente</p>
+      <button id="btn-permisos-guardar"
+        style="display:inline-flex;align-items:center;gap:8px;background:#642a72;
+          color:#fff;border:none;font-size:13px;font-weight:600;padding:10px 24px;
+          border-radius:10px;cursor:pointer">
+        Guardar permisos
+      </button>
+    </div>
+
+  </main>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     VISTA SPA: HISTORIAL DE ALBARANES (nivel raíz)
+══════════════════════════════════════════════════════════ -->
+<div id="view-historial" class="view flex-col min-h-screen">
+  <header style="background:#642a72;color:#fff;padding:0 16px;height:56px;
+    display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:30">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,255,255,0.2);
+        display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px">JP</div>
+      <div>
+        <p style="font-size:13px;font-weight:700;margin:0;line-height:1.2">JOSEPAN 360</p>
+        <p style="font-size:10px;margin:0;opacity:0.75">Historial de albaranes · [1002]</p>
+      </div>
+    </div>
+    <button id="btn-historial-volver" style="background:rgba(255,255,255,0.15);border:none;color:#fff;
+      font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer">← Volver</button>
+  </header>
+  <main style="flex:1;max-width:860px;width:100%;margin:0 auto;padding:20px 16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:12px;flex-wrap:wrap">
+      <div>
+        <h2 style="font-size:18px;font-weight:700;color:#0f172a;margin:0 0 2px">Historial de albaranes</h2>
+        <p style="font-size:13px;color:#64748b;margin:0">Órdenes de compra registradas</p>
+      </div>
+      <button id="btn-historial-nuevo" style="background:#642a72;border:none;color:#fff;
+        font-size:12px;font-weight:600;padding:8px 16px;border-radius:8px;cursor:pointer;white-space:nowrap">
+        + Nuevo albarán</button>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:16px;
+      display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+      <label style="font-size:12px;font-weight:600;color:#475569">Desde</label>
+      <input id="hist-fecha-desde" type="date" style="padding:6px 10px;font-size:12px;border:1px solid #e2e8f0;border-radius:8px;outline:none"/>
+      <label style="font-size:12px;font-weight:600;color:#475569">Hasta</label>
+      <input id="hist-fecha-hasta" type="date" style="padding:6px 10px;font-size:12px;border:1px solid #e2e8f0;border-radius:8px;outline:none"/>
+      <button id="btn-hist-filtrar" style="background:#f1f5f9;border:none;font-size:12px;font-weight:600;
+        color:#334155;padding:7px 14px;border-radius:8px;cursor:pointer">Filtrar</button>
+      <button id="btn-hist-limpiar" style="background:none;border:none;font-size:12px;
+        color:#94a3b8;cursor:pointer;text-decoration:underline">Limpiar</button>
+    </div>
+    <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+      <div id="hist-loading" style="display:none;padding:40px;text-align:center">
+        <svg style="width:24px;height:24px;margin:0 auto 8px;animation:spin 0.7s linear infinite"
+          fill="none" viewBox="0 0 24 24">
+          <circle style="opacity:0.25" cx="12" cy="12" r="10" stroke="#642a72" stroke-width="4"/>
+          <path style="opacity:0.75" fill="#642a72" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        </svg>
+        <p style="font-size:12px;color:#94a3b8;margin:0">Cargando albaranes…</p>
+      </div>
+      <div id="hist-empty" style="display:none;padding:40px;text-align:center">
+        <p style="font-size:13px;color:#64748b;margin:0">No hay albaranes en el rango seleccionado.</p>
+      </div>
+      <div id="hist-tabla-wrap" style="display:none;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;min-width:500px">
+          <thead>
+            <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0">
+              <th style="padding:10px 16px;font-size:11px;font-weight:700;color:#64748b;text-align:left;text-transform:uppercase">N.º Referencia</th>
+              <th style="padding:10px 16px;font-size:11px;font-weight:700;color:#64748b;text-align:left;text-transform:uppercase">Proveedor</th>
+              <th style="padding:10px 16px;font-size:11px;font-weight:700;color:#64748b;text-align:left;text-transform:uppercase">Fecha</th>
+              <th style="padding:10px 16px;font-size:11px;font-weight:700;color:#64748b;text-align:right;text-transform:uppercase">Total</th>
+              <th style="padding:10px 16px;font-size:11px;font-weight:700;color:#64748b;text-align:center;text-transform:uppercase">Estado</th>
+            </tr>
+          </thead>
+          <tbody id="hist-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="app.js?v=20260702a" defer></script>
 </body>
 </html>

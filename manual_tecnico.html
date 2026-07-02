@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Manual Técnico · [1002] Albaranes de Compras · JOSEPAN 360</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:#f4f5f7;color:#1e293b;line-height:1.6}
+.hero{background:linear-gradient(135deg,#1e293b 0%,#334155 100%);color:#fff;padding:40px 24px 32px}
+.hero h1{font-size:clamp(20px,4vw,26px);font-weight:800;margin-bottom:6px}
+.hero p{opacity:.8;font-size:14px}
+.badge{display:inline-block;background:rgba(255,255,255,.15);border-radius:20px;padding:3px 12px;font-size:12px;font-weight:600;margin-bottom:16px}
+.container{max-width:800px;margin:0 auto;padding:24px 16px 60px}
+h2{font-size:17px;font-weight:800;color:#1e293b;margin:32px 0 12px;padding-bottom:8px;border-bottom:2px solid #e2e8f0}
+h3{font-size:14px;font-weight:700;color:#475569;margin:20px 0 8px}
+p{font-size:14px;color:#475569;margin-bottom:10px}
+.card{background:#fff;border-radius:12px;border:1px solid #e2e8f0;padding:18px;margin-bottom:14px}
+pre{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:16px;font-size:12px;overflow-x:auto;margin-bottom:12px;line-height:1.5}
+code{background:#f1f5f9;border-radius:4px;padding:1px 6px;font-family:monospace;font-size:12px;color:#642a72}
+table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px}
+th{background:#f8fafc;padding:8px 12px;text-align:left;font-weight:700;color:#64748b;border-bottom:2px solid #e2e8f0;text-transform:uppercase;font-size:11px;letter-spacing:.04em}
+td{padding:8px 12px;border-bottom:1px solid #f1f5f9;color:#334155;vertical-align:top}
+tr:last-child td{border-bottom:none}
+.tag{display:inline-block;border-radius:4px;padding:1px 8px;font-size:11px;font-weight:700}
+.tag.get{background:#dbeafe;color:#1d4ed8}
+.tag.post{background:#d1fae5;color:#065f46}
+.tag.put{background:#fef3c7;color:#92400e}
+.note{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:13px;color:#1e40af;margin-bottom:12px}
+.warn{background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:10px 14px;font-size:13px;color:#92400e;margin-bottom:12px}
+footer{text-align:center;font-size:12px;color:#94a3b8;padding:24px;border-top:1px solid #e2e8f0;margin-top:40px}
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="badge">JOSEPAN 360 · OMNI · [1002] · Técnico</div>
+  <h1>⚙️ Manual Técnico<br>Registro de Albaranes de Compras</h1>
+  <p>Referencia para desarrolladores e integradores · API CORE v6.9 · Julio 2026</p>
+</div>
+
+<div class="container">
+
+  <!-- ARQUITECTURA -->
+  <h2>1. Arquitectura y estructura de archivos</h2>
+  <pre>
+compras.josepan.app/              ← subdominio Apache
+├── index.html                    ← SPA (938 líneas) — vistas, HTML, modales
+├── app.js?v=20260702a            ← Motor JS (2000+ líneas) — toda la lógica
+├── styles.css                    ← Tailwind CSS compilado estático (20 KB)
+├── .htaccess                     ← SPA fallback + Authorization header + métodos PUT/DELETE
+└── api/
+    ├── omni.php                  ← Proxy PHP centralizado (~590 líneas)
+    ├── config.php                ← Constantes: OMNI_API_BASE, ANTHROPIC_API_KEY
+    └── OmniCoreClient.php        ← SDK oficial OMNI — NO modificar</pre>
+
+  <h3>Flujo de peticiones (sin CORS)</h3>
+  <pre>
+Navegador (JS)
+  │
+  └── fetch("api/omni.php?action=X")     ← mismo origen → sin CORS
+            │
+       omni.php (cURL)
+            ├── POST api.omni.josepan.app/api/v1/auth/login
+            ├── GET  api.omni.josepan.app/api/v1/catalog/interlocutors
+            ├── GET  api.omni.josepan.app/api/v1/catalog/skus
+            ├── GET  api.omni.josepan.app/api/v1/purchasing/suppliers
+            ├── POST api.omni.josepan.app/api/v1/purchasing/orders
+            ├── PUT  api.omni.josepan.app/api/v1/purchasing/orders/{id}/approve
+            ├── POST api.omni.josepan.app/api/v1/inventory/batches
+            ├── POST api.omni.josepan.app/api/v1/inventory/reception
+            ├── GET  api.omni.josepan.app/api/v1/rbac/subsystems/1002/screen-permissions
+            └── POST api.omni.josepan.app/api/v1/messages  ← OCR Anthropic</pre>
+
+  <!-- VISTAS SPA -->
+  <h2>2. Vistas SPA</h2>
+  <div class="card">
+    <table>
+      <tr><th>ID</th><th>Descripción</th><th>Acceso</th></tr>
+      <tr><td><code>view-login</code></td><td>Formulario usuario + contraseña</td><td>Público</td></tr>
+      <tr><td><code>view-sede</code></td><td>Selección de sede post-login (con lista de interlocutores)</td><td>Token obtenido</td></tr>
+      <tr><td><code>view-app</code></td><td>App principal con pasos 1→4 y pantalla de éxito</td><td>Autenticado</td></tr>
+      <tr><td><code>view-historial</code></td><td>Historial de albaranes con filtro de fechas</td><td>Autenticado</td></tr>
+      <tr><td><code>view-permisos</code></td><td>Gestor de permisos RBAC</td><td>Solo SuperAdmin</td></tr>
+    </table>
+    <div class="note">Todas las vistas usan <code>showView(id)</code> que alterna la clase <code>active</code> y hace <code>window.scrollTo(0,0)</code>.</div>
+  </div>
+
+  <!-- FLUJO DE LOGIN -->
+  <h2>3. Flujo de autenticación</h2>
+  <div class="card">
+    <p><strong>Paso 1</strong> — El usuario introduce credenciales y pulsa Entrar. Se guardan en <code>S._pendingUsername</code> / <code>S._pendingPassword</code>. Se cargan las 17 sedes estáticas como fallback y se muestra <code>view-sede</code>.</p>
+    <p><strong>Paso 2</strong> — El usuario elige sede. Se ejecuta el login real:</p>
+    <pre>POST /auth/login
+{ "username": "jose.perez", "password": "...", "interlocutor_id": 2 }</pre>
+    <p>El rol se extrae del JWT si <code>d.role</code> llega <code>null</code>:</p>
+    <pre>
+const _pay = JSON.parse(atob(d.token.split('.')[1]...));
+S.role = _pay.role || _pay.rol || '';</pre>
+    <div class="warn">⚠️ El API v6.9 puede devolver <code>role: null</code> en el body. Siempre leer del JWT como fallback.</div>
+  </div>
+
+  <!-- FLUJO DE REGISTRO -->
+  <h2>4. Flujo de registro de albarán (paso 4)</h2>
+  <div class="card">
+    <p>Al confirmar el albarán se ejecutan 4 pasos en secuencia:</p>
+    <pre>
+// PASO 1: Crear OC
+POST /purchasing/orders
+{
+  "supplier_id": 74,
+  "interlocutor_id": 2,
+  "reference": "ALB-2026-001",
+  "reception_date": "2026-06-27",
+  "details": [{
+    "supplier_item_name": "PANCETA BACON",
+    "item_id": 111,
+    "item_type": "sku",
+    "unit_of_measure": "g",
+    "quantity_requested": 1000,
+    "unit_price": 5.50
+  }]
+}
+→ { "id": 32, "order_number": "OC-A3F2B1C4-20260627" }
+
+// PASO 2: Aprobar OC
+PUT /purchasing/orders/32/approve
+{ "reception_date": "2026-06-27" }
+
+// PASO 3: Crear lote (por ítem)
+POST /inventory/batches
+{
+  "batch_reference": "LOT-20260627-ABC",
+  "item_id": 111,
+  "item_type": "sku",
+  "expiration_date": "2027-06-30",   ← opcional
+  "cost_per_unit": 5.50
+}
+→ { "batch": { "id": 19 } }
+
+// PASO 4: Registrar recepción (por ítem)
+POST /inventory/reception
+{
+  "location_id": 2,
+  "batch_id": 19,
+  "item_id": 111,
+  "item_type": "sku",
+  "quantity": 1000,
+  "movement_type": "Compra",
+  "reference_document": "OC-A3F2B1C4-20260627"
+}</pre>
+  </div>
+
+  <!-- PROXY PHP -->
+  <h2>5. Proxy PHP — acciones disponibles</h2>
+  <div class="card">
+    <table>
+      <tr><th>action=</th><th>Método</th><th>Endpoint OMNI</th></tr>
+      <tr><td><code>login</code></td><td><span class="tag post">POST</span></td><td>/auth/login</td></tr>
+      <tr><td><code>interlocutors</code></td><td><span class="tag get">GET</span></td><td>/catalog/interlocutors</td></tr>
+      <tr><td><code>skus</code></td><td><span class="tag get">GET</span></td><td>/catalog/skus</td></tr>
+      <tr><td><code>suppliers</code></td><td><span class="tag get">GET</span> <span class="tag post">POST</span> <span class="tag put">PUT</span></td><td>/purchasing/suppliers</td></tr>
+      <tr><td><code>purchasing_order</code></td><td><span class="tag get">GET</span> <span class="tag post">POST</span></td><td>/purchasing/orders</td></tr>
+      <tr><td><code>batch</code></td><td><span class="tag post">POST</span></td><td>/inventory/batches</td></tr>
+      <tr><td><code>receive</code></td><td><span class="tag post">POST</span></td><td>/inventory/reception</td></tr>
+      <tr><td><code>ocr</code></td><td><span class="tag post">POST</span></td><td>api.anthropic.com/v1/messages</td></tr>
+      <tr><td><code>rbac_roles</code></td><td><span class="tag get">GET</span></td><td>/rbac/roles?ambito=operativo</td></tr>
+      <tr><td><code>rbac_perms</code></td><td><span class="tag get">GET</span> <span class="tag put">PUT</span></td><td>/rbac/subsystems/1002/screen-permissions</td></tr>
+      <tr><td><code>rbac_screens_register</code></td><td><span class="tag post">POST</span></td><td>/rbac/subsystems/1002/screens</td></tr>
+      <tr><td><code>reception_match</code></td><td><span class="tag get">GET</span></td><td>/inventory/reception/match</td></tr>
+      <tr><td><code>catalog_sku</code></td><td><span class="tag post">POST</span></td><td>/catalog/skus</td></tr>
+    </table>
+    <div class="note">El túnel de método HTTP se activa con <code>?_method=put</code> para compatibilidad con Apache.</div>
+  </div>
+
+  <!-- RBAC -->
+  <h2>6. RBAC — Pantallas del subsistema</h2>
+  <div class="card">
+    <table>
+      <tr><th>screen_key</th><th>Label</th><th>Descripción</th></tr>
+      <tr><td><code>registro_albaran</code></td><td>Recepción de Mercancía</td><td>Alta de stock por albarán (pasos 1-4)</td></tr>
+      <tr><td><code>historial_albaranes</code></td><td>Historial de Albaranes</td><td>Consulta de órdenes de compra registradas</td></tr>
+    </table>
+    <p>El SuperAdmin detectado por <code>S.role.toLowerCase().includes('superadmin')</code> o <code>role === 'superadministrador'</code> siempre bypassa las restricciones.</p>
+  </div>
+
+  <!-- CONFIG -->
+  <h2>7. Variables de entorno (Apache VirtualHost)</h2>
+  <pre>
+SetEnv OMNI_API_BASE     https://api.omni.josepan.app/api/v1
+SetEnv ANTHROPIC_API_KEY sk-ant-api03-...
+SetEnv OMNI_SERVICE_TOKEN eyJ...   # opcional</pre>
+  <div class="warn">⚠️ Nunca incluir claves en archivos del repositorio. Usar siempre SetEnv en el VirtualHost de Apache.</div>
+
+  <!-- DESPLIEGUE -->
+  <h2>8. Despliegue</h2>
+  <div class="card">
+    <pre>
+# Subir archivos al servidor
+rsync -avz --exclude='.git' \
+  index.html app.js styles.css .htaccess api/ \
+  usuario@servidor:/var/www/omni/omni_compras/
+
+# Verificar permisos
+chmod 644 /var/www/omni/omni_compras/api/config.php
+
+# Limpiar caché (si fuera necesario)
+touch /var/www/omni/omni_compras/index.html</pre>
+    <p>Para forzar recarga en el navegador, incrementar el parámetro de versión en <code>index.html</code>:</p>
+    <pre>&lt;script src="app.js?v=YYYYMMDD" defer&gt;&lt;/script&gt;</pre>
+  </div>
+
+  <!-- TAILWIND -->
+  <h2>9. CSS — Tailwind compilado estático</h2>
+  <div class="card">
+    <p>El proyecto usa Tailwind CSS compilado con CLI v3 (no CDN). Para recompilar tras cambios en el HTML:</p>
+    <pre>
+npm install -D tailwindcss@3
+npx tailwindcss -i tailwind_input.css -o styles.css --minify</pre>
+    <div class="warn">⚠️ Las clases generadas dinámicamente en JS (ej: colores, display) NO estarán en el CSS compilado. Usar siempre <code>style.display</code> o estilos inline para visibilidad dinámica.</div>
+  </div>
+
+</div>
+<footer>JOSEPAN 360 · Ecosistema OMNI · [1002] Albaranes de Compras · v6.9 · Julio 2026 · Uso interno</footer>
+</body>
+</html>
