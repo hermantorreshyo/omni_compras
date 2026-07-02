@@ -1,32 +1,28 @@
-# JOSEPAN 360 · [1002] Albaranes — Apache producción
-Options -Indexes
-AddType application/javascript .js
-AddType application/json .json
+# ═══════════════════════════════════════════════════════════════════════════
+#  JOSEPAN 360 · OMNI · [1003] — Apache .htaccess
+#  VirtualHost apunta directamente a la raíz del proyecto ⇒ RewriteBase /
+# ═══════════════════════════════════════════════════════════════════════════
 
-# Permitir métodos PUT y DELETE para el proxy PHP
-<Limit GET POST PUT DELETE OPTIONS>
-    Require all granted
-</Limit>
-
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-    RewriteBase /
-
-    # Pasar el header Authorization a PHP (Apache lo bloquea por defecto)
-    RewriteCond %{HTTP:Authorization} .
-    RewriteRule ^ - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
-
-    # Servir archivos reales directamente
-    RewriteCond %{REQUEST_FILENAME} -f [OR]
-    RewriteCond %{REQUEST_FILENAME} -d
-    RewriteRule ^ - [L]
-
-    # SPA fallback
-    RewriteRule ^ index.html [L]
-</IfModule>
-
-<FilesMatch "\.(js|css|html|php)$">
-    <IfModule mod_headers.c>
-        Header set Cache-Control "no-cache, no-store, must-revalidate"
-    </IfModule>
+# Bloquear acceso directo a ficheros sensibles
+<FilesMatch "^(\.env|\.env\.example|.*\.md|setup\.sh)$">
+  Require all denied
 </FilesMatch>
+
+# El directorio /api se sirve tal cual (PHP). No reescribir sus rutas.
+RewriteEngine On
+RewriteBase /
+
+# Recursos reales (archivos/carpetas existentes) se sirven directos
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Resto → SPA
+RewriteRule ^ index.html [L]
+
+# Cabeceras de seguridad básicas
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "same-origin"
+</IfModule>

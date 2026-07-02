@@ -1,95 +1,109 @@
-# [1002] Registro de Albaranes de Compras
-### JOSEPAN 360 · Ecosistema OMNI · v10.0 — API CORE v6.6.0
+# [1003] JOSEPAN 360 OMNI — Gestión de Almacenes y Mermas
 
-> Micro-aplicación web SPA para el registro digital de albaranes de compras. Fotografía el albarán, extrae los datos con IA, registra cada línea en el Kardex y opera en modo offline con sincronización diferida.
+Micro-app web (PWA táctil, mobile-first) del ecosistema OMNI para recepción
+contra albarán, ubicación física por QR, traspasos externos reglamentados y
+registro de mermas con foto. Stack **LAMP Vanilla** (PHP 8.1+, Vanilla JS, sin
+frameworks). Coherencia gráfica con [1002].
 
----
-
-## Stack técnico
-
-| Capa | Tecnología |
-|---|---|
-| Frontend | HTML5 · Tailwind CSS v3 (CDN) · JavaScript Vanilla ES6+ |
-| Proxy backend | PHP 8.1+ · cURL · `OmniCoreClient.php` (SDK oficial) |
-| OCR | Anthropic Claude Vision (`claude-opus-4-6`) |
-| Servidor | Apache 2.4 — XAMPP (local) / LAMP (producción) |
-| API CORE | `https://api.omni.josepan.app/api/v1` |
-
-## Estructura
+## Arquitectura de red
 
 ```
-1002/
-├── README.md
-├── MANUAL_USUARIO.md
-├── DOCUMENTACION_TECNICA.md
-├── MANUAL_DESPLIEGUE.md
-├── index.html
-├── app.js
-├── .htaccess
-└── api/
-    ├── OmniCoreClient.php   ← SDK oficial (no modificar)
-    └── omni.php             ← Proxy PHP centralizado
+Navegador  ──(mismo origen)──►  api/omni.php  ──(cURL)──►  API CORE v6 [1001]
+   JS                              proxy PHP                api.omni.josepan.app
 ```
 
-## Funcionalidades
+El navegador **solo** habla con `api/omni.php` (mismo dominio) ⇒ **cero CORS**.
+El proxy resuelve sesión (cookie HttpOnly + SameSite=Strict), aplica RBAC por
+acción y reenvía al API CORE añadiendo `Authorization: Bearer` y
+`X-Interlocutor-Id`. El JWT nunca vive en JavaScript.
 
-- **OCR automático** — Claude Vision extrae número, proveedor, fecha y líneas de cualquier albarán
-- **Selector de sede dinámico** — carga los 17 interlocutores de la red desde el API CORE
-- **RBAC de pantallas** — consulta `/rbac/subsystems/1002/my-screens` al hacer login
-- **Flujo purchasing** — `POST /purchasing/orders` → `details` → `reception` inline (v6.6.0)
-- **Crear proveedor** — si no existe, se crea desde el flujo con datos del OCR pre-rellenados
-- **Conversión metrológica** — kg/L/cajas → g/ml/ud antes de enviar al Kardex
-- **Outbox offline** — transacciones encoladas en localStorage, sincronización automática
+## Requisitos
 
-## Variables de entorno
+- PHP 8.1+ con extensión **cURL**
+- Apache con `mod_rewrite` y `mod_headers`
+- El API CORE v6 accesible desde el servidor
 
-```apache
-SetEnv ANTHROPIC_API_KEY   sk-ant-api03-...   # obligatorio para OCR
-SetEnv OMNI_SERVICE_TOKEN  eyJ...             # opcional: carga sedes sin token de usuario
-```
-
-## Instalación rápida
+## Instalación
 
 ```bash
-# 1. Copiar archivos
-cp -r 1002/ /var/www/omni/1002/
-
-# 2. Permisos
-chown -R www-data:www-data /var/www/omni/1002
-
-# 3. Configurar VirtualHost (ver MANUAL_DESPLIEGUE.md)
-
-# 4. SSL
-certbot --apache -d albaranes.josepan.app
-
-# 5. Verificar
-curl "https://albaranes.josepan.app/api/omni.php?action=interlocutors&public=1"
+git pull                 # en el servidor Debian
+bash setup.sh            # genera .env y verifica PHP/cURL
+# editar .env si el host del API CORE cambia
 ```
 
-## Credenciales de prueba
+Apunta el `DocumentRoot` del VirtualHost a la raíz del proyecto y recarga
+Apache. El `.htaccess` ya fija `RewriteBase /` (evita el bucle de redirección).
+
+## Variables de entorno (`.env`)
+
+| Variable           | Por defecto                     | Descripción                         |
+|--------------------|---------------------------------|-------------------------------------|
+| `OMNI_API_HOST`    | `https://api.omni.josepan.app`  | Host del API CORE, sin barra final  |
+| `OMNI_API_PREFIX`  | `/api/v1`                        | Prefijo de versión                  |
+
+## Mapa de carpetas
 
 ```
-Usuario:    herman.torres
-Contraseña: herman.torres   ← contraseña inicial = username (v6.6.0)
-Sede:       OBRADOR (id: 2)
+1003_app/
+├── index.html              SPA maestra (todas las vistas + estilos)
+├── .htaccess               RewriteBase / + cabeceras de seguridad
+├── .env.example            plantilla de configuración
+├── setup.sh                despliegue plug&play
+├── api/
+│   ├── omni.php            proxy único mismo-origen + RBAC por acción
+│   └── OmniCoreClient.php  SDK cURL (sustituir por el canónico del ecosistema)
+└── js/
+    ├── api-client.js       cliente mismo-origen (errores tipados)
+    ├── metrology.js        conversión a unidad base (g/ml/ud) en frontera
+    ├── scanner.js          QR (BarcodeDetector) + foto comprimida + alarma
+    ├── outbox-service.js   cola FIFO offline + parada de emergencia
+    └── app.js              router de vistas y lógica de los 4 flujos
 ```
 
-## Documentación
+## Flujos
 
-| Documento | Descripción |
-|---|---|
-| `MANUAL_USUARIO.md` | Guía de campo para operario y jefe de almacén |
-| `DOCUMENTACION_TECNICA.md` | Arquitectura, contratos API v6.6.0, OCR, errores |
-| `MANUAL_DESPLIEGUE.md` | LAMP, XAMPP, SSL, troubleshooting completo |
+1. **Recepción** contra albarán de compra (confirmar concordancia; observación si hay diferencia).
+2. **Ubicación** física por escaneo QR.
+3. **Traspaso externo**: SOLICITADO → EN_PICKING → LISTO_DESPACHO → EN_RUTA/PENDIENTE_RECEPCION → CERRADO (interfaz por rol).
+4. **Mermas** con foto obligatoria (VENCIMIENTO / DESPERFECTO).
 
-## Relación con otros subsistemas
+**Gestor de permisos (solo SuperAdmin):** pantalla exclusiva donde se asocia
+cada pantalla del módulo a los roles operativos del API CORE. El SuperAdmin ve
+**todas** las pantallas (pruebas) y, para el resto de roles, las pantallas
+visibles se resuelven dinámicamente desde el API CORE (`mis_pantallas`); si el
+API no responde el mapa, el cliente cae a sus valores por defecto.
 
-```
-[1001] API CORE ←── [1002] Albaranes  (purchasing/orders + inventory/reception)
-                ←── [1003] Almacenes
-                ←── [1004] Producción
-```
+Resiliencia offline mediante **Outbox** (cola FIFO en `localStorage`). Ante error
+fatal no recuperable se activa la **parada de emergencia** (pantalla roja + alarma).
 
----
+## Contrato del API CORE v6.6.0
 
-*JOSEPAN 360 · Ecosistema OMNI · [1002] · v10.0 · Junio 2026*
+El SDK (`api/OmniCoreClient.php`) **desenvuelve** el sobre canónico
+`{ status, data, message }`. Mapeo de campos reales aplicado en el cliente:
+
+- SKUs (`/catalog/skus`): `name`, `sku_final_code`, `unit_of_measure`, `id`→`item_id`. Filtros `?q=&item_type=&is_standardized=`.
+- Ubicaciones (`/catalog/locations`): `qr_code_uid` (casa el escaneo QR), etiqueta `area_type+shelf+position`, `id`→`location_id`.
+- Lotes (`/inventory/batches?item_id=`): `batch_reference`, `expiration_date`, `id`→`batch_id` (FEFO, filtrado por SKU).
+
+Operaciones atómicas: recepción (`/inventory/reception`, lote **inline** vía
+`batch:{batch_reference,expiration_date}`), ubicación = `Traslado Interno` y
+merma (`/inventory/scrap`, `file_data` opcional).
+
+Workflow de traspaso externo en `/inventory/transfers` (plural, multi-estado):
+`SOLICITADO→EN_PICKING→LISTO_DESPACHO→EN_RUTA→PENDIENTE_RECEPCION→CERRADO`, con
+ítems `{item_id,batch_id,quantity_requested|dispatched|received}`. El **RBAC por
+transición lo aplica el API CORE** (autoridad); el proxy mantiene auth y
+same-origin, y la visibilidad de pantallas la entrega `my-screens` en el login.
+
+## Documentación del proyecto (carpeta `docs/`)
+
+- `manual_usuario.html` — guía rápida para el operario (HTML autocontenido).
+- `manual_tecnico.html` — manual técnico/desarrollador (HTML autocontenido).
+- `prompt-maestro-proyecto.md` — prompt de reconstrucción completa del subsistema.
+- `1003-postman-collection.json` — colección Postman de las acciones del proxy.
+
+## Pendiente de validación
+
+- Sustituir `api/OmniCoreClient.php` por el SDK canónico del ecosistema (este replica el contrato).
+- Ejecutar la migración de BD del API CORE antes de activar el workflow de traspasos.
+- Registrar la clave de pantalla `dashboard` en el catálogo del API CORE (admin visual o curl); una vez registrada, el Gestor de Permisos la ofrece y aparece en `/my-screens` según los roles asignados.
