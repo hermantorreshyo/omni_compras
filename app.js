@@ -308,9 +308,42 @@ function _doLogin() {
   S._pendingUsername = username;
   S._pendingPassword = password;
 
-  // Mostrar pantalla de sede con lista estática inmediata
+  // Mostrar fallback estático inmediatamente (no bloquea)
   _fallbackSedes($('sel-sede'));
   showView('view-sede');
+
+  // Cargar interlocutores reales desde el API en segundo plano
+  _cargarInterlocutoresReales();
+}
+
+async function _cargarInterlocutoresReales() {
+  try {
+    // Login temporal con iid=1 solo para obtener token y consultar interlocutors
+    const r = await Api.login(S._pendingUsername, S._pendingPassword, 1);
+    const token = r.data?.token;
+    if (!token) return;
+
+    // Consultar interlocutors con token temporal
+    const res = await fetch('api/omni.php?action=interlocutors&all=1', {
+      headers: { 'Authorization': 'Bearer ' + token, 'X-Interlocutor-Id': '1' }
+    });
+    const data = await res.json();
+    const items = data.data?.items ?? [];
+    if (!items.length) return;
+
+    // Actualizar el selector con los interlocutores reales
+    const sel = $('sel-sede');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— Seleccionar sede —</option>';
+    items.forEach(i => {
+      const o = document.createElement('option');
+      o.value = i.id;
+      o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
+      sel.appendChild(o);
+    });
+  } catch(_) {
+    // Silencioso — el fallback estático ya está visible
+  }
 }
 
 
@@ -1169,13 +1202,8 @@ function initStep3() {
   $('btn-step3-back').addEventListener('click', () => goStep(2));
   $('btn-step3-next').addEventListener('click', () => {
     if (!S.items.length) { toast('Añade al menos un producto.','warn'); return; }
-    rellenarResumen(); goStep(4);
-    // Scroll al contenedor de la vista, no al window
-    const va = $('view-app');
-    if (va) va.scrollTop = 0;
-    document.querySelector('.view.active')?.scrollTo?.(0, 0);
-    window.scrollTo(0, 0);
-    document.documentElement.scrollTop = 0;
+    rellenarResumen();
+    showView('view-resumen'); // Vista SPA independiente — sin problemas de scroll
   });
   const ean=$('input-ean');
   ean.addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault();resolverEan(ean.value.trim());} });
@@ -1545,7 +1573,7 @@ function rellenarResumen() {
 }
 
 function initStep4() {
-  $('btn-step4-back').addEventListener('click',()=>goStep(3));
+  $('btn-step4-back')?.addEventListener('click', () => { showView('view-app'); goStep(3); });
 
   $('btn-confirm').addEventListener('click', async () => {
     const btn=$('btn-confirm'), label=$('btn-confirm-label'), spin=$('btn-confirm-spin');
@@ -1634,8 +1662,7 @@ function initStep4() {
       });
 
       // Ocultar pasos y mostrar éxito
-      [1,2,3,4].forEach(i => $(`step-${i}`)?.classList.add('hidden'));
-      $('step-success').classList.remove('hidden');
+      showView('view-exito');
       window.scrollTo({ top: 0, behavior: 'instant' });
       toast(`Albarán ${S.numAlbaran} registrado correctamente.`, 'ok');
 
@@ -2031,8 +2058,10 @@ function _cerrarPermisos() {
 
 document.addEventListener('DOMContentLoaded', () => {
   $('btn-logout').addEventListener('click', _logout);
-  $('btn-nuevo').addEventListener('click',  resetFormulario);
+  $('btn-nuevo')?.addEventListener('click', () => { showView('view-app'); resetFormulario(); });
   $('btn-historial-nuevo')?.addEventListener('click', () => { showView('view-app'); resetFormulario(); goStep(1); });
+  $('btn-exito-volver')?.addEventListener('click', () => { showView('view-app'); goStep(1); });
+  $('btn-step4-back')?.addEventListener('click', () => { showView('view-app'); goStep(3); });
   $('btn-historial-volver')?.addEventListener('click', () => { showView('view-app'); goStep(S.step || 1); });
   $('btn-hist-filtrar')?.addEventListener('click',  _cargarHistorial);
   // Gestor de permisos
