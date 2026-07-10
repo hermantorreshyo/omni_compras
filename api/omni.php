@@ -368,6 +368,14 @@ switch ($action) {
         ok(['matches' => $res['raw']['data']['matches'] ?? $res['raw']['data'] ?? []]);
         break;
 
+    case 'locations':
+        if ($method !== 'GET') fail('Solo GET.', 405);
+        if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
+        $res = apiCall('GET', '/catalog/locations', null, $token, $iid);
+        if (!$res['ok']) fail(omniError($res, 'Error al cargar ubicaciones.'), $res['status'] ?: 502);
+        ok(['items' => rowsOf($res)]);
+        break;
+
     case 'batch':
         if ($method !== 'POST') fail('Solo POST.', 405);
         if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');

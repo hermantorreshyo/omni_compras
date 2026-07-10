@@ -427,10 +427,11 @@ async function _cargarRbacScreens() {
    8. CATÁLOGOS
 ══════════════════════════════════════════════════════ */
 async function cargarCatalogos() {
-  const [skusR, allR, suppR] = await Promise.all([
+  const [skusR, allR, suppR, locR] = await Promise.all([
     Api.skus().catch(()=>({data:{items:[]}})),
     Api.interlocutors().catch(()=>({data:{items:[]}})),
     Api.suppliers().catch(()=>({data:{items:[]}})),
+    Api._call('GET', { action:'locations' }).catch(()=>({data:{items:[]}})),
   ]);
 
   S.skus = skusR.data?.items ?? [];
@@ -441,10 +442,10 @@ async function cargarCatalogos() {
     if (s.id)    S.byId[String(s.id)] = s;
   });
 
-  // Bodega destino: todos los interlocutores de la red
-  S.todosBodegas = allR.data?.items ?? [];
-  // Proveedores: catalog/suppliers (endpoint dedicado)
-  S.suppliers = suppR.data?.items ?? [];
+  S.todosBodegas    = allR.data?.items ?? [];
+  S.suppliers       = suppR.data?.items ?? [];
+  // Locations reales (tabla locations) para inventory/reception
+  S.locations       = locR.data?.items ?? locR.data ?? [];
   poblarSelectBodega();
   poblarSelectProveedor();
 }
@@ -452,12 +453,22 @@ async function cargarCatalogos() {
 function poblarSelectBodega() {
   const sel = $('sel-ubicacion'); if (!sel) return;
   sel.innerHTML = '<option value="">— Seleccionar —</option>';
-  S.todosBodegas.forEach(i => {
+  // Usar locations reales (tabla locations) para que location_id sea válido
+  // en POST /inventory/reception. Fallback a interlocutors si locations vacío.
+  const lista = (S.locations?.length ? S.locations : S.todosBodegas);
+  lista.forEach(i => {
     const o = document.createElement('option');
-    o.value = i.id; o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
-    if (parseInt(i.id) === S.sedePrincipalId) o.selected = true;
+    o.value = i.id;
+    o.textContent = i.name || i.commercial_name || i.fiscal_name || `Ubicación ${i.id}`;
     sel.appendChild(o);
   });
+  // Pre-seleccionar la ubicación asociada a la sede actual
+  if (!sel.value && S.locations?.length) {
+    const match = S.locations.find(l =>
+      l.interlocutor_id === S.interlocutorId || l.id === S.interlocutorId
+    );
+    if (match) { sel.value = match.id; S.bodegaId = match.id; S.bodegaNom = match.name || ''; }
+  }
   if (sel.value) { S.bodegaId=parseInt(sel.value,10); S.bodegaNom=sel.selectedOptions[0]?.text??''; }
 }
 
@@ -1133,12 +1144,12 @@ function initStep3() {
   $('btn-step3-next').addEventListener('click', () => {
     if (!S.items.length) { toast('Añade al menos un producto.','warn'); return; }
     rellenarResumen(); goStep(4);
-    // Forzar scroll al inicio — el contenedor puede capturarlo antes que window
-    setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: 'instant' });
-      document.documentElement.scrollTop = 0;
-      document.body.scrollTop = 0;
-    }, 50);
+    // Scroll al contenedor de la vista, no al window
+    const va = $('view-app');
+    if (va) va.scrollTop = 0;
+    document.querySelector('.view.active')?.scrollTo?.(0, 0);
+    window.scrollTo(0, 0);
+    document.documentElement.scrollTop = 0;
   });
   const ean=$('input-ean');
   ean.addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault();resolverEan(ean.value.trim());} });
