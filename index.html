@@ -34,7 +34,15 @@
     .tbl tr:hover td { background: #f8fafc; }
     /* Dropdown */
     #ean-dropdown { box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
-  </style>
+  @keyframes slideUp {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+#step-4:not(.hidden),
+#step-success:not(.hidden) {
+  animation: slideUp 0.32s cubic-bezier(0.22,1,0.36,1) both;
+}
+</style>
 </head>
 <body class="bg-ink-100 min-h-screen">
 
@@ -1296,6 +1304,6 @@
   </main>
 </div>
 
-<script src="app.js?v=20260702c" defer></script>
+<script src="app.js?v=20260702d" defer></script>
 </body>
 </html>

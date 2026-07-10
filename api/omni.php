@@ -382,14 +382,16 @@ switch ($action) {
         $b = body();
         if (empty($b['batch_reference'])) fail('batch_reference es obligatorio.', 400, 'ERR_VALIDATION');
         if (empty($b['item_id']))         fail('item_id es obligatorio.', 400, 'ERR_VALIDATION');
-        if (empty($b['expiration_date'])) fail('expiration_date es obligatorio.', 400, 'ERR_VALIDATION');
         $batchPayload = [
             'batch_reference' => $b['batch_reference'],
             'item_id'         => (int)$b['item_id'],
             'item_type'       => $b['item_type'] ?? 'sku',
-            'expiration_date' => $b['expiration_date'],
             'cost_per_unit'   => (float)($b['cost_per_unit'] ?? 0),
         ];
+        // expiration_date es opcional — no enviar si está vacío
+        if (!empty($b['expiration_date'])) {
+            $batchPayload['expiration_date'] = $b['expiration_date'];
+        }
         $res = apiCall('POST', '/inventory/batches', $batchPayload, $token, $iid);
         if (!$res['ok']) fail(omniError($res, 'Error al crear lote.'), $res['status'] ?: 422, $res['omni_code'] ?? 'ERR_VALIDATION');
         ok(['batch' => $res['raw']['data'] ?? $res['raw']]);
