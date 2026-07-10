@@ -1133,6 +1133,12 @@ function initStep3() {
   $('btn-step3-next').addEventListener('click', () => {
     if (!S.items.length) { toast('Añade al menos un producto.','warn'); return; }
     rellenarResumen(); goStep(4);
+    // Forzar scroll al inicio — el contenedor puede capturarlo antes que window
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    }, 50);
   });
   const ean=$('input-ean');
   ean.addEventListener('keydown', e => { if(e.key==='Enter'){e.preventDefault();resolverEan(ean.value.trim());} });
@@ -1538,7 +1544,7 @@ function initStep4() {
       // ── PASOS 3 y 4: Batch + Recepción por cada ítem ───────
       for (const item of S.items) {
         const batchRes = await Api._call('POST', { action:'batch' }, {
-          batch_reference: item.batchRef,
+          batch_reference: item.batchRef || genLote(),  // auto-generar si no se proporcionó
           item_id:         item.skuId,
           item_type:       'sku',
           ...(item.expDate ? { expiration_date: item.expDate } : {}),
