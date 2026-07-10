@@ -453,22 +453,48 @@ async function cargarCatalogos() {
 function poblarSelectBodega() {
   const sel = $('sel-ubicacion'); if (!sel) return;
   sel.innerHTML = '<option value="">— Seleccionar —</option>';
-  // Usar locations reales (tabla locations) para que location_id sea válido
-  // en POST /inventory/reception. Fallback a interlocutors si locations vacío.
-  const lista = (S.locations?.length ? S.locations : S.todosBodegas);
-  lista.forEach(i => {
-    const o = document.createElement('option');
-    o.value = i.id;
-    o.textContent = i.name || i.commercial_name || i.fiscal_name || `Ubicación ${i.id}`;
-    sel.appendChild(o);
-  });
-  // Pre-seleccionar la ubicación asociada a la sede actual
-  if (!sel.value && S.locations?.length) {
+
+  if (!S.locations?.length) {
+    // Sin locations: usar interlocutors como antes
+    S.todosBodegas.forEach(i => {
+      const o = document.createElement('option');
+      o.value = i.id;
+      o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
+      if (parseInt(i.id) === S.sedePrincipalId) o.selected = true;
+      sel.appendChild(o);
+    });
+  } else {
+    // Con locations: construir etiqueta legible cruzando con interlocutors
+    // Formato: "OBRADOR ALCORCON — Almacén Principal"
+    S.locations.forEach(loc => {
+      const interlocutor = S.todosBodegas.find(b =>
+        String(b.id) === String(loc.interlocutor_id)
+      );
+      const interlocutorNom = interlocutor
+        ? (interlocutor.commercial_name || interlocutor.fiscal_name)
+        : '';
+      const locNom = loc.name || loc.description || loc.code || `Ubicación ${loc.id}`;
+      const label = interlocutorNom
+        ? `${interlocutorNom} — ${locNom}`
+        : locNom;
+
+      const o = document.createElement('option');
+      o.value = loc.id;
+      o.textContent = label;
+      sel.appendChild(o);
+    });
+
+    // Pre-seleccionar la ubicación de la sede actual
     const match = S.locations.find(l =>
-      l.interlocutor_id === S.interlocutorId || l.id === S.interlocutorId
+      String(l.interlocutor_id) === String(S.interlocutorId)
     );
-    if (match) { sel.value = match.id; S.bodegaId = match.id; S.bodegaNom = match.name || ''; }
+    if (match) {
+      sel.value    = match.id;
+      S.bodegaId   = match.id;
+      S.bodegaNom  = sel.selectedOptions[0]?.text ?? '';
+    }
   }
+
   if (sel.value) { S.bodegaId=parseInt(sel.value,10); S.bodegaNom=sel.selectedOptions[0]?.text??''; }
 }
 
