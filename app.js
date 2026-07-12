@@ -1656,7 +1656,7 @@ function initStep4() {
             ${formatQuantity(it.quantity, {unit_of_measure:it.unidadBase, pack_size:it.packSize||1})}
           </td>
           <td class="font-mono text-xs text-ink-600">${esc(it.batchRef)}</td>
-          <td class="text-ink-600">${fmtDate(it.expDate)}</td>
+          <td class="text-ink-600">${it.expDate ? fmtDate(it.expDate) : '<span style="color:#94a3b8">Sin caducidad</span>'}</td>
           <td class="text-right font-mono text-xs text-ink-700">
             ${it.costPerUnit > 0 ? it.costPerUnit.toFixed(2)+' €' : '—'}
           </td>`;
