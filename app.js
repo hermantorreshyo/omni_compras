@@ -140,7 +140,8 @@ const S = {
   // Sesión
   user: null, interlocutorId: Api._iid, sedePrincipalId: 0,
   _pendingUsername: null, _pendingPassword: null,
-  modoEntrada: 'imagen', // 'imagen' | 'manual'
+  modoEntrada: 'imagen',
+  systemParams: {}, // 'imagen' | 'manual'
   sedeName: '', role: '', permissions: [],
 
   // Catálogos
@@ -304,41 +305,35 @@ function _doLogin() {
     return;
   }
 
-  // Guardar credenciales para el login real al confirmar la sede
   S._pendingUsername = username;
   S._pendingPassword = password;
 
-  // Mostrar fallback estático inmediatamente (no bloquea)
+  // Mostrar fallback estático inmediatamente
   _fallbackSedes($('sel-sede'));
   showView('view-sede');
 
-  // Cargar interlocutores reales desde el API en segundo plano
+  // §3 Manual v6.9: login paso 1 con interlocutor_id=0
+  // Devuelve available_interlocutors — sedes a las que tiene acceso el usuario
   _cargarInterlocutoresReales();
 }
 
 async function _cargarInterlocutoresReales() {
   try {
-    // Login temporal con iid=1 solo para obtener token y consultar interlocutors
-    const r = await Api.login(S._pendingUsername, S._pendingPassword, 1);
-    const token = r.data?.token;
-    if (!token) return;
+    const r = await Api.login(S._pendingUsername, S._pendingPassword, 0);
+    // available_interlocutors = sedes a las que tiene acceso el usuario
+    const sedes = r.data?.available_interlocutors
+      ?? r.data?.interlocutors
+      ?? [];
 
-    // Consultar interlocutors con token temporal
-    const res = await fetch('api/omni.php?action=interlocutors&all=1', {
-      headers: { 'Authorization': 'Bearer ' + token, 'X-Interlocutor-Id': '1' }
-    });
-    const data = await res.json();
-    const items = data.data?.items ?? [];
-    if (!items.length) return;
+    if (!sedes.length) return; // mantener fallback
 
-    // Actualizar el selector con los interlocutores reales
     const sel = $('sel-sede');
     if (!sel) return;
     sel.innerHTML = '<option value="">— Seleccionar sede —</option>';
-    items.forEach(i => {
+    sedes.forEach(i => {
       const o = document.createElement('option');
       o.value = i.id;
-      o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
+      o.textContent = i.commercial_name || i.fiscal_name || i.name || `Sede ${i.id}`;
       sel.appendChild(o);
     });
   } catch(_) {
@@ -460,12 +455,15 @@ async function _cargarRbacScreens() {
    8. CATÁLOGOS
 ══════════════════════════════════════════════════════ */
 async function cargarCatalogos() {
-  const [skusR, allR, suppR, locR] = await Promise.all([
+  const [skusR, allR, suppR, locR, paramsR] = await Promise.all([
     Api.skus().catch(()=>({data:{items:[]}})),
     Api.interlocutors().catch(()=>({data:{items:[]}})),
     Api.suppliers().catch(()=>({data:{items:[]}})),
-    Api._call('GET', { action:'locations' }).catch(()=>({data:{items:[]}})),
+    Api._call('GET', { action:'locations', interlocutor_id: S.interlocutorId }).catch(()=>({data:{items:[]}})),
+    Api._call('GET', { action:'system_params' }).catch(()=>({data:{}})),
   ]);
+  // §7: guardar parámetros del sistema para uso en la UI
+  S.systemParams = paramsR.data ?? {};
 
   S.skus = skusR.data?.items ?? [];
   S.byEan = {}; S.byId = {};
@@ -488,43 +486,47 @@ function poblarSelectBodega() {
   sel.innerHTML = '<option value="">— Seleccionar —</option>';
 
   if (!S.locations?.length) {
-    // Sin locations: usar interlocutors como antes
-    S.todosBodegas.forEach(i => {
-      const o = document.createElement('option');
-      o.value = i.id;
-      o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
-      if (parseInt(i.id) === S.sedePrincipalId) o.selected = true;
-      sel.appendChild(o);
-    });
+    // Sin locations: usar interlocutors filtrado por sede actual
+    S.todosBodegas
+      .filter(i => parseInt(i.id) === S.sedePrincipalId || S.todosBodegas.length <= 5)
+      .forEach(i => {
+        const o = document.createElement('option');
+        o.value = i.id;
+        o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
+        if (parseInt(i.id) === S.sedePrincipalId) o.selected = true;
+        sel.appendChild(o);
+      });
+    // Si solo quedó una opción, mostrar todas
+    if (sel.options.length <= 1) {
+      S.todosBodegas.forEach(i => {
+        const o = document.createElement('option');
+        o.value = i.id;
+        o.textContent = i.commercial_name || i.fiscal_name || `Sede ${i.id}`;
+        if (parseInt(i.id) === S.sedePrincipalId) o.selected = true;
+        sel.appendChild(o);
+      });
+    }
   } else {
-    // Con locations: construir etiqueta legible cruzando con interlocutors
-    // Formato: "OBRADOR ALCORCON — Almacén Principal"
-    S.locations.forEach(loc => {
-      const interlocutor = S.todosBodegas.find(b =>
-        String(b.id) === String(loc.interlocutor_id)
-      );
-      const interlocutorNom = interlocutor
-        ? (interlocutor.commercial_name || interlocutor.fiscal_name)
-        : '';
-      const locNom = loc.name || loc.description || loc.code || `Ubicación ${loc.id}`;
-      const label = interlocutorNom
-        ? `${interlocutorNom} — ${locNom}`
-        : locNom;
-
-      const o = document.createElement('option');
-      o.value = loc.id;
-      o.textContent = label;
-      sel.appendChild(o);
-    });
-
-    // Pre-seleccionar la ubicación de la sede actual
-    const match = S.locations.find(l =>
+    // Con locations: mostrar solo las del interlocutor actual
+    const locsFiltradas = S.locations.filter(l =>
       String(l.interlocutor_id) === String(S.interlocutorId)
     );
-    if (match) {
-      sel.value    = match.id;
-      S.bodegaId   = match.id;
-      S.bodegaNom  = sel.selectedOptions[0]?.text ?? '';
+    // Si no hay locations para esta sede, mostrar todas
+    const lista = locsFiltradas.length ? locsFiltradas : S.locations;
+
+    lista.forEach(loc => {
+      const locNom = loc.name || loc.description || loc.code || `Ubicación ${loc.id}`;
+      const o = document.createElement('option');
+      o.value = loc.id;
+      o.textContent = locNom;
+      sel.appendChild(o);
+    });
+
+    // Pre-seleccionar la primera ubicación
+    if (!sel.value && lista.length) {
+      sel.value   = lista[0].id;
+      S.bodegaId  = lista[0].id;
+      S.bodegaNom = lista[0].name || '';
     }
   }
 
@@ -2090,7 +2092,6 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(_) {}
     cargarCatalogos().then(()=>{
       showView('view-app'); goStep(1);
-      $('lbl-fecha').textContent=new Date().toLocaleString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
     });
   } else {
     showView('view-login');

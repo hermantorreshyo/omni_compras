@@ -49,6 +49,7 @@ function apiCall(string $method, string $path, ?array $payload, string $token, i
     $headers = ['Content-Type: application/json', 'Accept: application/json'];
     if ($token) $headers[] = 'Authorization: Bearer ' . $token;
     if ($iid)   $headers[] = 'X-Interlocutor-Id: ' . $iid;
+    $headers[] = 'X-Subsystem-Id: 1002';
     $ch = curl_init($url);
     curl_setopt_array($ch, [
         CURLOPT_CUSTOMREQUEST  => strtoupper($method),
@@ -123,7 +124,7 @@ switch ($action) {
         $password   = trim($b['password']         ?? '');
         $interlocId = (int)($b['interlocutor_id'] ?? 0);
         if (!$username || !$password) fail('Usuario y contraseña obligatorios.', 400, 'ERR_VALIDATION');
-        if ($interlocId < 1)          fail('interlocutor_id es obligatorio.', 400, 'ERR_VALIDATION');
+        // interlocutor_id=0 = paso 1 (obtener available_interlocutors)
         $res = apiCall('POST', '/auth/login', [
             'username'        => $username,
             'password'        => $password,
@@ -224,10 +225,25 @@ switch ($action) {
     // ══════════════════════════════════════════════════════
     //  UBICACIONES — GET /catalog/locations
     // ══════════════════════════════════════════════════════
+
+    case 'system_params':
+        if ($method !== 'GET') fail('Solo GET.', 405);
+        if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
+        $res = apiCall('GET', '/system/params', null, $token, $iid);
+        if (!$res['ok']) fail(omniError($res, 'Error al cargar parámetros.'), $res['status'] ?: 502);
+        ok($res['raw']['data'] ?? []);
+        break;
+
     case 'locations':
         if ($method !== 'GET') fail('Solo GET.', 405);
         if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
-        $res = apiCall('GET', '/catalog/locations', null, $token, $iid);
+        $locParams = [];
+        // Filtrar por interlocutor_id si se especifica (§9 del manual)
+        if (!empty($_GET['interlocutor_id'])) {
+            $locParams['interlocutor_id'] = (int)$_GET['interlocutor_id'];
+        }
+        $locQs = $locParams ? '?' . http_build_query($locParams) : '';
+        $res = apiCall('GET', '/catalog/locations' . $locQs, null, $token, $iid);
         if (!$res['ok']) fail(omniError($res, 'Error al cargar ubicaciones.'), $res['status'] ?: 502);
         ok(['items' => rowsOf($res)]);
         break;
@@ -368,10 +384,25 @@ switch ($action) {
         ok(['matches' => $res['raw']['data']['matches'] ?? $res['raw']['data'] ?? []]);
         break;
 
+
+    case 'system_params':
+        if ($method !== 'GET') fail('Solo GET.', 405);
+        if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
+        $res = apiCall('GET', '/system/params', null, $token, $iid);
+        if (!$res['ok']) fail(omniError($res, 'Error al cargar parámetros.'), $res['status'] ?: 502);
+        ok($res['raw']['data'] ?? []);
+        break;
+
     case 'locations':
         if ($method !== 'GET') fail('Solo GET.', 405);
         if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
-        $res = apiCall('GET', '/catalog/locations', null, $token, $iid);
+        $locParams = [];
+        // Filtrar por interlocutor_id si se especifica (§9 del manual)
+        if (!empty($_GET['interlocutor_id'])) {
+            $locParams['interlocutor_id'] = (int)$_GET['interlocutor_id'];
+        }
+        $locQs = $locParams ? '?' . http_build_query($locParams) : '';
+        $res = apiCall('GET', '/catalog/locations' . $locQs, null, $token, $iid);
         if (!$res['ok']) fail(omniError($res, 'Error al cargar ubicaciones.'), $res['status'] ?: 502);
         ok(['items' => rowsOf($res)]);
         break;
