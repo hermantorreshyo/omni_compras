@@ -238,10 +238,9 @@ switch ($action) {
         if ($method !== 'GET') fail('Solo GET.', 405);
         if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
         $locParams = [];
-        // Filtrar por interlocutor_id si se especifica (§9 del manual)
-        if (!empty($_GET['interlocutor_id'])) {
-            $locParams['interlocutor_id'] = (int)$_GET['interlocutor_id'];
-        }
+        if (!empty($_GET['interlocutor_id'])) $locParams['interlocutor_id'] = (int)$_GET['interlocutor_id'];
+        if (!empty($_GET['only_virtual']))    $locParams['only_virtual']    = 1;
+        if (!empty($_GET['include_virtual'])) $locParams['include_virtual'] = 1;
         $locQs = $locParams ? '?' . http_build_query($locParams) : '';
         $res = apiCall('GET', '/catalog/locations' . $locQs, null, $token, $iid);
         if (!$res['ok']) fail(omniError($res, 'Error al cargar ubicaciones.'), $res['status'] ?: 502);
@@ -397,10 +396,9 @@ switch ($action) {
         if ($method !== 'GET') fail('Solo GET.', 405);
         if (!$token) fail('Token requerido.', 401, 'ERR_AUTH');
         $locParams = [];
-        // Filtrar por interlocutor_id si se especifica (§9 del manual)
-        if (!empty($_GET['interlocutor_id'])) {
-            $locParams['interlocutor_id'] = (int)$_GET['interlocutor_id'];
-        }
+        if (!empty($_GET['interlocutor_id'])) $locParams['interlocutor_id'] = (int)$_GET['interlocutor_id'];
+        if (!empty($_GET['only_virtual']))    $locParams['only_virtual']    = 1;
+        if (!empty($_GET['include_virtual'])) $locParams['include_virtual'] = 1;
         $locQs = $locParams ? '?' . http_build_query($locParams) : '';
         $res = apiCall('GET', '/catalog/locations' . $locQs, null, $token, $iid);
         if (!$res['ok']) fail(omniError($res, 'Error al cargar ubicaciones.'), $res['status'] ?: 502);

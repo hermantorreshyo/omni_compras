@@ -153,6 +153,7 @@ const S = {
   numAlbaran: '', purchaseOrderId: null,
   proveedorId: 0, proveedorNom: '',
   bodegaId: 0,    bodegaNom: '',
+  locationTransito: null,  // ID de ubicación virtual de tránsito
   items: [],
 
   step: 1,
@@ -471,11 +472,12 @@ async function _cargarRbacScreens() {
    8. CATÁLOGOS
 ══════════════════════════════════════════════════════ */
 async function cargarCatalogos() {
-  const [skusR, allR, suppR, locR, paramsR] = await Promise.all([
+  const [skusR, allR, suppR, locR, locVR, paramsR] = await Promise.all([
     Api.skus().catch(()=>({data:{items:[]}})),
     Api.interlocutors().catch(()=>({data:{items:[]}})),
     Api.suppliers().catch(()=>({data:{items:[]}})),
     Api._call('GET', { action:'locations', interlocutor_id: S.interlocutorId }).catch(()=>({data:{items:[]}})),
+    Api._call('GET', { action:'locations', interlocutor_id: S.interlocutorId, only_virtual: 1 }).catch(()=>({data:{items:[]}})),
     Api._call('GET', { action:'system_params' }).catch(()=>({data:{}})),
   ]);
   // §7: guardar parámetros del sistema para uso en la UI
@@ -493,6 +495,12 @@ async function cargarCatalogos() {
   S.suppliers       = suppR.data?.items ?? [];
   // Locations reales (tabla locations) para inventory/reception
   S.locations       = locR.data?.items ?? locR.data ?? [];
+  // Ubicaciones virtuales: mermas y tránsito
+  const locsVirtuales = locVR.data?.items ?? locVR.data ?? [];
+  S.locationTransito = locsVirtuales.find(l =>
+    (l.location_type || '').toLowerCase() === 'transito' ||
+    (l.qr_code_uid  || '').toLowerCase().includes('tra')
+  ) ?? null;
   poblarSelectBodega();
   poblarSelectProveedor();
 }
@@ -1639,7 +1647,7 @@ function initStep4() {
         if (!batchId) throw { error: `No se obtuvo batch_id para "${item.nombre}".` };
 
         await Api.receive({
-          location_id:        S.bodegaId || 1,
+          location_id:        S.locationTransito?.id || S.bodegaId || 1,
           batch_id:           batchId,
           item_id:            item.skuId,
           item_type:          'sku',
