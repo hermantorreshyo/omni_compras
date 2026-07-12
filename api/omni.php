@@ -419,10 +419,13 @@ switch ($action) {
             'item_type'       => $b['item_type'] ?? 'sku',
             'cost_per_unit'   => (float)($b['cost_per_unit'] ?? 0),
         ];
-        // expiration_date es opcional — no enviar si está vacío
-        if (!empty($b['expiration_date'])) {
-            $batchPayload['expiration_date'] = $b['expiration_date'];
-        }
+        // expiration_date: enviar si el usuario la introdujo.
+        // Si no la introdujo (proveedor no la suministra), usar 2099-12-31
+        // como placeholder hasta que el API CORE lo acepte como opcional.
+        // REQ: ver solicitud REQ_BATCH_EXPDATE_OPCIONAL.md
+        $batchPayload['expiration_date'] = !empty($b['expiration_date'])
+            ? $b['expiration_date']
+            : '2099-12-31';
         $res = apiCall('POST', '/inventory/batches', $batchPayload, $token, $iid);
         if (!$res['ok']) fail(omniError($res, 'Error al crear lote.'), $res['status'] ?: 422, $res['omni_code'] ?? 'ERR_VALIDATION');
         ok(['batch' => $res['raw']['data'] ?? $res['raw']]);
