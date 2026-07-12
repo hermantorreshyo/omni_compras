@@ -319,23 +319,39 @@ function _doLogin() {
 
 async function _cargarInterlocutoresReales() {
   try {
-    const r = await Api.login(S._pendingUsername, S._pendingPassword, 0);
-    // available_interlocutors = sedes a las que tiene acceso el usuario
-    const sedes = r.data?.available_interlocutors
-      ?? r.data?.interlocutors
-      ?? [];
+    // Paso 1: login con iid=1 (empresa raíz) para obtener token temporal
+    const r = await Api.login(S._pendingUsername, S._pendingPassword, 1);
+    const token = r.data?.token;
+    if (!token) return;
 
-    if (!sedes.length) return; // mantener fallback
+    // Paso 2: consultar GET /catalog/interlocutors con ese token
+    const res = await fetch('api/omni.php?action=interlocutors&all=1', {
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'X-Interlocutor-Id': '1',
+        'X-Subsystem-Id': '1002',
+      }
+    });
+    const data = await res.json();
+    const items = data.data?.items ?? data.data ?? [];
+    if (!Array.isArray(items) || !items.length) return;
 
+    // Actualizar el selector con los interlocutores reales del API
     const sel = $('sel-sede');
     if (!sel) return;
     sel.innerHTML = '<option value="">— Seleccionar sede —</option>';
-    sedes.forEach(i => {
-      const o = document.createElement('option');
-      o.value = i.id;
-      o.textContent = i.commercial_name || i.fiscal_name || i.name || `Sede ${i.id}`;
-      sel.appendChild(o);
-    });
+    items
+      .sort((a, b) => {
+        const na = (a.commercial_name || a.fiscal_name || '').toLowerCase();
+        const nb = (b.commercial_name || b.fiscal_name || '').toLowerCase();
+        return na.localeCompare(nb, 'es');
+      })
+      .forEach(i => {
+        const o = document.createElement('option');
+        o.value = i.id;
+        o.textContent = i.commercial_name || i.fiscal_name || i.name || `Sede ${i.id}`;
+        sel.appendChild(o);
+      });
   } catch(_) {
     // Silencioso — el fallback estático ya está visible
   }
