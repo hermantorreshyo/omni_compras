@@ -187,8 +187,10 @@ const UC_OPTS = {
  * Para SKUs ud: devuelve las unidades físicas directamente (sin multiplicar por pack_size).
  */
 const convertir = (val, ub, uc) => {
-  if (ub === 'ud') return Math.round(parseFloat(val) || 0); // siempre unidades físicas
-  return Math.round((parseFloat(val) || 0) * (FACTORES[ub]?.[uc] ?? 1));
+  if (ub === 'ud') return Math.round(parseFloat(val) || 0); // unidades físicas = entero
+  // g y ml admiten hasta 4 decimales — redondear a 4 para evitar errores de punto flotante
+  const result = (parseFloat(val) || 0) * (FACTORES[ub]?.[uc] ?? 1);
+  return Math.round(result * 10000) / 10000;
 };
 
 /**
@@ -199,13 +201,15 @@ const convertir = (val, ub, uc) => {
 function formatQuantity(quantity, sku) {
   const ub = (sku?.unit_of_measure || 'ud').toLowerCase();
   const ps = parseInt(sku?.pack_size || 1, 10);
+  // Mostrar máx 2 decimales visualmente (sistema soporta hasta 4)
+  const fmt = n => Number.isInteger(n) ? String(n) : parseFloat(n.toFixed(2)).toString();
   if (ub === 'ud' && ps > 1) {
     const totalG = quantity * ps;
-    return `${quantity} ud (${totalG >= 1000 ? (totalG/1000).toFixed(2) + ' kg' : totalG + ' g'})`;
+    return `${fmt(quantity)} ud (${totalG >= 1000 ? (totalG/1000).toFixed(2) + ' kg' : totalG + ' g'})`;
   }
-  if (ub === 'g')  return quantity >= 1000 ? (quantity/1000).toFixed(2) + ' kg' : quantity + ' g';
-  if (ub === 'ml') return quantity >= 1000 ? (quantity/1000).toFixed(2) + ' L'  : quantity + ' ml';
-  return quantity + ' ud';
+  if (ub === 'g')  return quantity >= 1000 ? (quantity/1000).toFixed(2) + ' kg' : fmt(quantity) + ' g';
+  if (ub === 'ml') return quantity >= 1000 ? (quantity/1000).toFixed(2) + ' L'  : fmt(quantity) + ' ml';
+  return fmt(quantity) + ' ud';
 }
 
 /* ══════════════════════════════════════════════════════
@@ -745,7 +749,7 @@ function _procesarLineasOcr(lineas) {
               </label>
               <input type="number" class="ocr-qty w-full px-2 py-1.5 text-sm border border-ink-300
                 rounded-lg font-mono text-center focus:border-brand focus:outline-none"
-                value="${qty || ''}" min="1" placeholder="0" />
+                value="${qty || ''}" min="0" step="0.0001" placeholder="0.00" />
               <p class="text-[10px] text-ink-400 mt-0.5">OCR: ${esc(cantRaw)}</p>
             </div>
             <div>
@@ -838,7 +842,7 @@ function _bindOcrCardListeners() {
   container.querySelectorAll('.ocr-add-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const card  = btn.closest('.ocr-line-card');
-      const qty   = parseInt(card.querySelector('.ocr-qty')?.value  || '0', 10);
+      const qty   = parseFloat(card.querySelector('.ocr-qty')?.value  || '0') || 0;
       const lote  = card.querySelector('.ocr-lote')?.value.trim()  || '';
       const vence = card.querySelector('.ocr-vence')?.value         || '';
       const ub    = btn.dataset.ub   || 'ud';
@@ -900,7 +904,7 @@ function _añadirTodosOcr() {
   let added = 0;
   cards.forEach(btn => {
     const card  = btn.closest('.ocr-line-card');
-    const qty   = parseInt(card.querySelector('.ocr-qty')?.value  || '0', 10);
+    const qty   = parseFloat(card.querySelector('.ocr-qty')?.value  || '0') || 0;
     const lote  = card.querySelector('.ocr-lote')?.value.trim()  || '';
     const vence = card.querySelector('.ocr-vence')?.value         || '';
     const ub    = btn.dataset.ub   || 'ud';
@@ -1516,7 +1520,7 @@ function actualizarConv() {
 
   // Solo mostrar el peso total cuando es ud con pack_size > 1 (§20 BRAUNGEL FRIO)
   if (qty > 0 && ub === 'ud' && ps > 1) {
-    const totalG = Math.round(qty) * ps;
+    const totalG = qty * ps;
     const kgStr  = totalG >= 1000 ? (totalG/1000).toFixed(2) + ' kg' : totalG + ' g';
     const psStr  = ps >= 1000 ? (ps/1000) + ' kg' : ps + ' g';
     pesoEl.textContent = `Total: ${kgStr} (${Math.round(qty)} × ${psStr})`;
@@ -1527,7 +1531,7 @@ function actualizarConv() {
 }
 
 function añadirItem() {
-  const qty=parseFloat($('inp-qty').value), ub=$('hid-sku-ub').value, uc=ub; // §20: uc=ub (sin selector de formato)
+  const qty=parseFloat($('inp-qty').value || '0') || 0, ub=$('hid-sku-ub').value, uc=ub; // §20: uc=ub (sin selector de formato)
   const lote=$('inp-lote').value.trim(), vence=$('inp-vence').value;
   if (!qty||qty<=0)              {toast('Cantidad > 0','warn');return;}
   // Lote y vencimiento son opcionales — algunos proveedores no los suministran
